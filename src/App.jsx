@@ -154,7 +154,16 @@ export default function App() {
     setIsAnalyzing(true);
     setAiError("");
     
-    // 整理目前盤面數據傳給 AI
+    // 1. 從 Vercel 環境變數安全地讀取 API Key
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+    // 💡 防呆檢查：如果沒有設定 Key，直接在畫面上提示
+    if (!apiKey) {
+      setAiError("系統尚未設定 AI 通行證 (API Key)，請前往 Vercel 設定 VITE_GEMINI_API_KEY。");
+      setIsAnalyzing(false);
+      return;
+    }
+    
     const marketSummary = marketData.map(d => 
       `${d.name}: ${d.price.toFixed(2)} (${d.change >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)`
     ).join('\n');
@@ -170,15 +179,14 @@ export default function App() {
     3. 結尾給出一個簡短的短線觀察重點。
     4. 請使用繁體中文。`;
 
-    const apiKey = ""; // 執行環境會自動提供
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+    // 2. 更新為目前開放的最新強大模型: gemini-2.0-flash
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
     const payload = {
       contents: [{ parts: [{ text: promptText }] }],
       systemInstruction: {
         parts: [{ text: "你是一位專業的華爾街與台灣雙棲財經分析師。請用繁體中文回答，語氣專業冷靜。請記得台灣股市的習慣是紅色代表上漲，綠色代表下跌。" }]
       },
-      // 啟用 Google 搜尋工具，讓 AI 能根據真實世界的新聞分析
       tools: [{ google_search: {} }] 
     };
 
@@ -193,27 +201,30 @@ export default function App() {
           body: JSON.stringify(payload)
         });
         
-        if (!response.ok) throw new Error(`API 請求失敗: ${response.status}`);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`API 請求失敗: ${response.status} - ${errorData.error?.message || '未知錯誤'}`);
+        }
         
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         
         if (text) {
-          // 簡單過濾掉可能出現的 Markdown 符號，讓顯示更乾淨
           setAiAnalysis(text.replace(/\*\*/g, ''));
-          break; // 成功則跳出迴圈
+          break;
         } else {
           throw new Error("無法解析 AI 回應");
         }
       } catch (error) {
         retries--;
+        console.error("AI 分析錯誤:", error);
         if (retries === 0) {
-          console.error(error);
-          setAiError("抱歉，目前連線 AI 伺服器忙碌中，請稍後再試。");
+          // 將實際的錯誤訊息顯示出來，方便除錯
+          setAiError(`AI 伺服器連線失敗：${error.message}`);
           setAiAnalysis("");
         } else {
           await new Promise(res => setTimeout(res, delay));
-          delay *= 2; // 指數退避策略
+          delay *= 2;
         }
       }
     }
