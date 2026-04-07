@@ -44,7 +44,11 @@ export default async function handler(req, res) {
     // 回傳 JSON 給前端
     res.status(200).json(marketData);
   } catch (error) {
-    console.error("Yahoo API 錯誤:", error);
-    res.status(500).json({ error: '無法獲取市場數據' });
+    console.error("Yahoo API 錯誤細節:", error);
+    // 把錯誤訊息轉成字串，直接傳給前端，這樣我們按 F12 就能看到真正死因！
+    res.status(500).json({ 
+      error: '無法獲取市場數據', 
+      details: error.message || error.toString() 
+    });
   }
 }
