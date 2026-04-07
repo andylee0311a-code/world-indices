@@ -120,29 +120,31 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // 模擬即時報價引擎
-  useEffect(() => {
+  // 真實 API 報價引擎 (連接 Vercel Serverless Function)
+   useEffect(() => {
     if (!isLive) return;
 
-    const interval = setInterval(() => {
-      setMarketData(prevData => {
-        return prevData.map(item => {
-          if (Math.random() > 0.3) return item;
-          const volatility = (Math.random() - 0.5) * 0.001; 
-          const priceChange = item.price * volatility;
-          const newPrice = item.price + priceChange;
-          const newChange = item.change + priceChange;
-          const newPct = (newChange / (item.price - item.change)) * 100;
+    const fetchMarketData = async () => {
+      try {
+        // 呼叫我們剛剛寫的 Vercel API
+        const response = await fetch('/api/market');
+        if (!response.ok) throw new Error('網路回應錯誤');
+        
+        const data = await response.json();
+        if (data && data.length > 0) {
+          setMarketData(data); // 將真實數據更新到畫面上！
+        }
+      } catch (error) {
+        console.error("獲取真實報價失敗:", error);
+      }
+    };
 
-          return {
-            ...item,
-            price: newPrice,
-            change: newChange,
-            pct: newPct
-          };
-        });
-      });
-    }, 1500);
+    // 初次載入時，立刻抓取一次最新資料
+    fetchMarketData();
+
+    // 💡 專業防呆：Yahoo Finance 抓太快會被封鎖 IP (Rate Limit)
+    // 我們將更新頻率設定為每 10 秒抓取一次 (10000 毫秒)
+    const interval = setInterval(fetchMarketData, 10000);
 
     return () => clearInterval(interval);
   }, [isLive]);
