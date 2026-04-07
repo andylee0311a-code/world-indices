@@ -178,7 +178,7 @@ export default function App() {
     setIsAnalyzing(true);
     setAiError("");
     
-    const apiKey = "";
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     
     const marketSummary = marketData.map(d => 
       `${d.name}: ${d.price.toFixed(2)} (${d.change >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)`
