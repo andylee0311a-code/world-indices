@@ -201,12 +201,13 @@ export default function App() {
     setIsAnalyzing(true);
     setAiError("");
     
-    // =====================================================================
+    // ==========================================
     // ⚠️ 大師特別提醒：Vercel 部署注意事項！
-    // 為了在此處預覽不報錯，此處使用空字串（環境會自動注入）。
-    // 若您要在您本機環境編譯並推送到 Vercel，請手動將下一行修改為：
+    // 為了讓右側預覽畫面不報錯，此處必須為空字串。
+    // 在您要推送到 Github/Vercel 之前，請在您的本機電腦上把下面這行改成：
     // const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    // =====================================================================
+    // ==========================================
+
    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     
     const marketSummary = marketData.map(d => 
@@ -224,7 +225,7 @@ export default function App() {
     3. 結尾給出一個簡短的短線觀察重點。
     4. 請使用繁體中文。`;
 
-    // 使用目前最穩定強大的版本端點
+    // 使用目前最穩定強大的 preview 版本
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
     const payload = {
@@ -263,7 +264,7 @@ export default function App() {
         retries--;
         console.error("AI 分析錯誤:", error);
         if (retries === 0) {
-          setAiError("抱歉，目前連線 AI 伺服器發生錯誤，請檢查 API Key 設定或稍後再試。");
+          setAiError("抱歉，目前連線 AI 伺服器發生錯誤，請稍後再試。");
           setAiAnalysis("");
         } else {
           await new Promise(res => setTimeout(res, delay));
