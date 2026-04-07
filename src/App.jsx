@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TrendingUp, TrendingDown, Clock, Activity, Globe, Zap, Sparkles, RefreshCcw, AlertTriangle, LayoutGrid, List } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, Activity, Globe, Zap, Sparkles, RefreshCcw, AlertTriangle, LayoutGrid, List, ArrowUp } from 'lucide-react';
 
 // 初始模擬資料
 const INITIAL_MARKET_DATA = [
@@ -114,6 +114,8 @@ export default function App() {
   const [aiAnalysis, setAiAnalysis] = useState("點擊上方按鈕，AI 將為您擷取最新市場數據並產生即時盤勢解析。");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiError, setAiError] = useState("");
+  
+  const [showTopBtn, setShowTopBtn] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -126,6 +128,28 @@ export default function App() {
       document.documentElement.style.fontSize = '100%';
     };
   }, [fontSizeScale]);
+
+  // 監聽滾動事件，控制「回頁首」按鈕的顯示與隱藏
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowTopBtn(true);
+      } else {
+        setShowTopBtn(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // 平滑捲動至頁首
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  };
 
   // 真實 API 報價引擎與 fallback 機制
   useEffect(() => {
@@ -178,7 +202,7 @@ export default function App() {
     setIsAnalyzing(true);
     setAiError("");
     
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  import.meta.env.VITE_GEMINI_API_KEY;
     
     const marketSummary = marketData.map(d => 
       `${d.name}: ${d.price.toFixed(2)} (${d.change >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)`
@@ -386,6 +410,18 @@ export default function App() {
       <footer className="max-w-7xl mx-auto mt-12 pt-6 border-t border-gray-800 text-center text-gray-500 text-xs">
         <p>© 2026 專業金融儀表板 Prototype. 結合 Gemini 2.5 即時分析與 Google Search Grounding 技術。</p>
       </footer>
+
+      {/* 回頁首按鈕 */}
+      {showTopBtn && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-8 right-8 z-50 p-3 bg-indigo-600/90 text-white rounded-full shadow-lg hover:bg-indigo-500 hover:-translate-y-1 hover:shadow-indigo-500/50 transition-all duration-300 backdrop-blur-sm focus:outline-none"
+          title="回到頁首"
+          aria-label="回到頁首"
+        >
+          <ArrowUp size={24} />
+        </button>
+      )}
     </div>
   );
 }
