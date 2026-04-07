@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TrendingUp, TrendingDown, Clock, Activity, Globe, Zap, Sparkles, RefreshCcw, AlertTriangle, LayoutGrid, List } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, Activity, Globe, Zap, Sparkles, RefreshCcw, AlertTriangle, LayoutGrid, List, ArrowUp } from 'lucide-react';
 
 // 初始模擬資料
 const INITIAL_MARKET_DATA = [
@@ -114,6 +114,8 @@ export default function App() {
   const [aiAnalysis, setAiAnalysis] = useState("點擊上方按鈕，AI 將為您擷取最新市場數據並產生即時盤勢解析。");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiError, setAiError] = useState("");
+  
+  const [showTopBtn, setShowTopBtn] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -127,13 +129,33 @@ export default function App() {
     };
   }, [fontSizeScale]);
 
+  // 監聽滾動事件，控制「回頁首」按鈕
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowTopBtn(true);
+      } else {
+        setShowTopBtn(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  };
+
   // 真實 API 報價引擎與 fallback 機制
   useEffect(() => {
     if (!isLive) return;
 
     const fetchMarketData = async () => {
       try {
-        // 在預覽環境 (blob:) 或無法解析相對路徑的環境中，強制使用 fallback
         if (typeof window !== 'undefined' && window.location.origin.startsWith('blob:')) {
           throw new Error('Fallback to mock engine'); 
         }
@@ -146,7 +168,7 @@ export default function App() {
           setMarketData(data);
         }
       } catch (error) {
-        // 無法獲取真實 API (如 Canvas 預覽模式) 時，自動切換為模擬跳動
+        // Fallback: 模擬跳動
         setMarketData(prevData => {
           return prevData.map(item => {
             if (Math.random() > 0.3) return item;
@@ -178,6 +200,12 @@ export default function App() {
     setIsAnalyzing(true);
     setAiError("");
     
+    // ==========================================
+    // ⚠️ Vercel 上線注意事項：
+    // 在您的本地端專案準備推送到 Vercel 之前，
+    // 請將下面這行改成：
+    // const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    // ==========================================
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     
     const marketSummary = marketData.map(d => 
@@ -195,7 +223,8 @@ export default function App() {
     3. 結尾給出一個簡短的短線觀察重點。
     4. 請使用繁體中文。`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    // 確保使用正確的模型端點
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
     const payload = {
       contents: [{ parts: [{ text: promptText }] }],
@@ -386,6 +415,17 @@ export default function App() {
       <footer className="max-w-7xl mx-auto mt-12 pt-6 border-t border-gray-800 text-center text-gray-500 text-xs">
         <p>© 2026 專業金融儀表板 Prototype. 結合 Gemini 2.5 即時分析與 Google Search Grounding 技術。</p>
       </footer>
+
+      {showTopBtn && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-8 right-8 z-50 p-3 bg-indigo-600/90 text-white rounded-full shadow-lg hover:bg-indigo-500 hover:-translate-y-1 hover:shadow-indigo-500/50 transition-all duration-300 backdrop-blur-sm focus:outline-none"
+          title="回到頁首"
+          aria-label="回到頁首"
+        >
+          <ArrowUp size={24} />
+        </button>
+      )}
     </div>
   );
 }
