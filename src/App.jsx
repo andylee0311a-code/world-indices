@@ -122,6 +122,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // 字型縮放
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontSizeScale * 100}%`;
     return () => {
@@ -200,13 +201,13 @@ export default function App() {
     setIsAnalyzing(true);
     setAiError("");
     
-    // ==========================================
-    // ⚠️ Vercel 上線注意事項：
-    // 在您的本地端專案準備推送到 Vercel 之前，
-    // 請將下面這行改成：
+    // =====================================================================
+    // ⚠️ 大師特別提醒：Vercel 部署注意事項！
+    // 為了在此處預覽不報錯，此處使用空字串（環境會自動注入）。
+    // 若您要在您本機環境編譯並推送到 Vercel，請手動將下一行修改為：
     // const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    // ==========================================
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    // =====================================================================
+   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     
     const marketSummary = marketData.map(d => 
       `${d.name}: ${d.price.toFixed(2)} (${d.change >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)`
@@ -223,7 +224,7 @@ export default function App() {
     3. 結尾給出一個簡短的短線觀察重點。
     4. 請使用繁體中文。`;
 
-    // 確保使用正確的模型端點
+    // 使用目前最穩定強大的版本端點
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
     const payload = {
@@ -234,7 +235,7 @@ export default function App() {
       tools: [{ google_search: {} }] 
     };
 
-    let retries = 3;
+    let retries = 5;
     let delay = 1000;
     
     while (retries > 0) {
@@ -246,8 +247,7 @@ export default function App() {
         });
         
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(`API 請求失敗: ${response.status} - ${errorData.error?.message || '未知錯誤'}`);
+          throw new Error(`API 請求失敗: ${response.status}`);
         }
         
         const data = await response.json();
@@ -263,11 +263,11 @@ export default function App() {
         retries--;
         console.error("AI 分析錯誤:", error);
         if (retries === 0) {
-          setAiError(`AI 伺服器連線失敗：${error.message}`);
+          setAiError("抱歉，目前連線 AI 伺服器發生錯誤，請檢查 API Key 設定或稍後再試。");
           setAiAnalysis("");
         } else {
           await new Promise(res => setTimeout(res, delay));
-          delay *= 2;
+          delay *= 2; // 指數退避重試
         }
       }
     }
@@ -413,7 +413,7 @@ export default function App() {
       </main>
 
       <footer className="max-w-7xl mx-auto mt-12 pt-6 border-t border-gray-800 text-center text-gray-500 text-xs">
-        <p>© 2026 專業金融儀表板 Prototype. 結合 Gemini 2.5 即時分析與 Google Search Grounding 技術。</p>
+        <p>© 2026 專業金融儀表板 Prototype. 結合 Gemini 即時分析與 Google Search Grounding 技術。</p>
       </footer>
 
       {showTopBtn && (
