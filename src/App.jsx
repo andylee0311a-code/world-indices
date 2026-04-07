@@ -180,7 +180,8 @@ export default function App() {
     4. 請使用繁體中文。`;
 
     // 2. 更新為目前開放的最新強大模型: gemini-2.0-flash
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    // ✅ 更新為官方最穩定的長期支援版本：gemini-1.5-flash
+const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const payload = {
       contents: [{ parts: [{ text: promptText }] }],
