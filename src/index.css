@@ -1,0 +1,5 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+這樣一來，Tailwind 就能正確地編譯你專案中所有的樣式了。當你在終端機跑 `npm run dev` 時，你的金融面板應該就會呈現完美的樣式囉！
