@@ -30,24 +30,44 @@ export default async function handler(req, res) {
 
   try {
     const symbolsString = SYMBOLS_MAP.map(s => s.symbol).join(',');
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsString}`;
+    const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsString}`;
+    
+    let quotes = [];
 
-    // 🌟 關鍵修復：加入 User-Agent 偽裝成一般瀏覽器，避免被 Yahoo 阻擋
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+    // 🌟 策略 A：嘗試直接連線 Yahoo (附帶防阻擋標頭)
+    try {
+      const response = await fetch(yahooUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Cache-Control': 'no-cache',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Direct connection blocked, status: ${response.status}`);
       }
-    });
 
-    if (!response.ok) {
-      throw new Error(`Yahoo API 請求失敗，狀態碼: ${response.status}`);
+      const data = await response.json();
+      quotes = data.quoteResponse?.result || [];
+      
+    } catch (directError) {
+      console.warn("直接連線被 Yahoo 阻擋，自動切換至代理伺服器...", directError.message);
+      
+      // 🌟 策略 B：如果 Vercel IP 被封鎖，無縫切換到第三方代理抓取
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`;
+      const proxyResponse = await fetch(proxyUrl);
+      
+      if (!proxyResponse.ok) {
+        throw new Error(`Proxy fallback failed, status: ${proxyResponse.status}`);
+      }
+      
+      const proxyData = await proxyResponse.json();
+      quotes = proxyData.quoteResponse?.result || [];
     }
 
-    const data = await response.json();
-    const quotes = data.quoteResponse?.result || [];
-
+    // 3. 整理數據格式回傳給前端
     const formattedData = SYMBOLS_MAP.map(item => {
       const quote = quotes.find(q => q.symbol === item.symbol);
       if (quote) {
@@ -65,7 +85,7 @@ export default async function handler(req, res) {
     res.status(200).json(formattedData);
     
   } catch (error) {
-    console.error("Vercel API 伺服器錯誤:", error);
+    console.error("Vercel API 伺服器終極錯誤:", error);
     res.status(500).json({ error: '獲取市場報價失敗', details: error.message });
   }
 }
