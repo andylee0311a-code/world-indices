@@ -364,7 +364,7 @@ export default function App() {
       <footer className="max-w-7xl mx-auto mt-12 pt-6 pb-8 border-t border-gray-800 text-center flex flex-col items-center justify-center">
         <p className="text-gray-500 text-xs">© 2026 專業金融儀表板 Prototype. 數據嚴格同步至 Yahoo Finance。</p>
         <div className="mt-3 inline-block">
-          <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-semibold tracking-wider text-sm shadow-sm">Design by Andy Lee</p>
+          <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-semibold tracking-wider text-sm shadow-sm">Designed by Andy Lee</p>
         </div>
       </footer>
 
