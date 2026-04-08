@@ -182,7 +182,7 @@ export default function App() {
     const promptText = `你是一位專業分析師，請針對以下全球盤勢給出 200 字繁體中文分析：\n${marketSummary}`;
 
     // 🌟 2026 年最強穩定組合：v1 正式端點 + gemini-3-flash
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-3-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=${apiKey}`;
 
     const payload = {
       contents: [{ parts: [{ text: promptText }] }],
