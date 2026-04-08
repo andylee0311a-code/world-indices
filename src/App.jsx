@@ -367,7 +367,7 @@ export default function App() {
         <p className="text-gray-500 text-xs">© 2026 專業金融儀表板 Prototype. 結合 Gemini 即時分析與 Google Search Grounding 技術。</p>
         <div className="mt-3 inline-block">
           <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-semibold tracking-wider text-sm shadow-sm">
-            Design by Andy Lee
+            Designed by Andy Lee
           </p>
         </div>
       </footer>
