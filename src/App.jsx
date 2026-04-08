@@ -145,7 +145,29 @@ export default function App() {
         const response = await fetch('/api/market');
         if (!response.ok) throw new Error('API Error');
         const data = await response.json();
-        if (data && data.length > 0) setMarketData(data);
+        if (data && data.length > 0) {
+          setMarketData(prevData => {
+            return prevData.map(item => {
+              const apiItem = data.find(d => d.id === item.id);
+              if (apiItem) {
+                return apiItem; 
+              } else {
+                if (Math.random() > 0.3) return item;
+                const volatility = (Math.random() - 0.5) * 0.001; 
+                const priceChange = item.price * volatility;
+                const newPrice = item.price + priceChange;
+                const newChange = item.change + priceChange;
+                
+                return {
+                  ...item,
+                  price: newPrice,
+                  change: newChange,
+                  pct: ((newChange) / (item.price - item.change)) * 100
+                };
+              }
+            });
+          });
+        }
       } catch (error) {
         setMarketData(prev => prev.map(item => {
           if (Math.random() > 0.3) return item;
