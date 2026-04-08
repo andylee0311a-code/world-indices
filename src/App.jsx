@@ -226,7 +226,7 @@ export default function App() {
     setAiError("");
     
     // 將會報錯的 import.meta 寫法替換為空字串，以適應預覽環境
-    const apiKey = "";
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
     
     const marketSummary = marketData.map(d => 
       `${d.name}: ${d.price.toFixed(2)} (${d.change >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)`
