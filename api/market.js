@@ -30,44 +30,58 @@ export default async function handler(req, res) {
 
   try {
     const symbolsString = SYMBOLS_MAP.map(s => s.symbol).join(',');
-    const targetUrl1 = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsString}`;
-    const targetUrl2 = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${symbolsString}`;
-    
     let quotes = [];
 
-    // 🌟 終極策略：多重備援路線 (輪詢直到成功為止)
+    // 🌟 終極策略：混用 Quote 與 Spark 雙重端點
+    // Yahoo 近期針對 /quote 端點進行了嚴格的 Cookie/Crumb 驗證，會阻擋 Vercel IP 並回傳空陣列。
+    // 但是 /spark 端點通常是免驗證的！我們將其加入作為最強力的備援。
     const fetchRoutes = [
-      targetUrl1, // 路線 1: Yahoo query1
-      targetUrl2, // 路線 2: Yahoo query2
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl1)}`, // 路線 3: allorigins 代理
-      `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(targetUrl1)}` // 路線 4: codetabs 代理
+      { url: `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsString}`, type: 'quote' },
+      { url: `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${symbolsString}&range=1d`, type: 'spark' },
+      { url: `https://query2.finance.yahoo.com/v7/finance/spark?symbols=${symbolsString}&range=1d`, type: 'spark' },
+      { url: `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v7/finance/spark?symbols=${symbolsString}&range=1d`)}`, type: 'spark' }
     ];
 
     for (const route of fetchRoutes) {
       try {
-        const response = await fetch(route, {
+        const response = await fetch(route.url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Accept': 'application/json',
-            'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
             'Cache-Control': 'no-cache',
           }
         });
 
         if (response.ok) {
           const data = await response.json();
-          if (data && data.quoteResponse && data.quoteResponse.result) {
+          
+          // 解析 Quote 格式 (確定回傳的 result 不是空的才算成功)
+          if (route.type === 'quote' && data?.quoteResponse?.result?.length > 0) {
             quotes = data.quoteResponse.result;
-            break; // 只要有一條路線成功抓到資料，就立刻跳出迴圈！
+            break; 
+          } 
+          // 解析 Spark 格式 (抽出走勢圖資料夾帶的最新 Meta 報價)
+          else if (route.type === 'spark' && data?.spark?.result?.length > 0) {
+            quotes = data.spark.result.map(r => {
+              const meta = r.response?.[0]?.meta || {};
+              const price = meta.regularMarketPrice || meta.chartPreviousClose || 0;
+              const prevClose = meta.previousClose || meta.chartPreviousClose || price;
+              return {
+                symbol: r.symbol,
+                regularMarketPrice: price,
+                regularMarketChange: price - prevClose,
+                regularMarketChangePercent: prevClose !== 0 ? ((price - prevClose) / prevClose) * 100 : 0
+              };
+            });
+            break; 
           }
         }
       } catch (routeError) {
-        // 單一路線失敗不拋出錯誤，繼續嘗試下一條路線
-        console.warn(`路線連線失敗，切換下一條備援...`);
+        console.warn(`路線連線失敗: ${route.url}，切換下一條備援...`);
       }
     }
 
-    // 3. 整理數據格式回傳給前端 (即使 quotes 是空的，也會回傳 price: 0，不再引發 500 錯誤)
+    // 3. 整理數據格式回傳給前端
     const formattedData = SYMBOLS_MAP.map(item => {
       const quote = quotes.find(q => q.symbol === item.symbol);
       if (quote) {
@@ -82,12 +96,10 @@ export default async function handler(req, res) {
       }
     });
 
-    // 永遠回傳 200，讓前端自行處理 0 元的狀態
     res.status(200).json(formattedData);
     
   } catch (error) {
     console.error("Vercel API 伺服器終極錯誤:", error);
-    // 即使發生最嚴重的未知錯誤，也回傳 200 與空陣列，保護前端不崩潰
     res.status(200).json([]);
   }
 }
