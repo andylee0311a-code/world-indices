@@ -10,11 +10,11 @@ export default async function handler(req, res) {
     return;
   }
 
-  // 2. 定義代號
+  // 2. 定義代號 (已將台指期替換為台積電 ADR 與美元兌台幣)
   const SYMBOLS_MAP = [
     { id: 'tw-taiex', symbol: '^TWII', name: '台灣加權指數', category: '台灣市場' },
-    { id: 'tw-txn', symbol: 'TWN=F', name: '台指期 (電子盤)', category: '台灣市場' },
-    { id: 'tw-tx-all', symbol: 'TX=F', name: '台指近全', category: '台灣市場' },
+    { id: 'tw-tsm', symbol: 'TSM', name: '台積電 ADR', category: '台灣市場' },
+    { id: 'tw-usdtwd', symbol: 'TWD=X', name: '美元兌台幣', category: '台灣市場' },
     { id: 'us-dji', symbol: '^DJI', name: '道瓊工業指數', category: '美股四大指數' },
     { id: 'us-spx', symbol: '^GSPC', name: '標普 500 指數', category: '美股四大指數' },
     { id: 'us-ndx', symbol: '^IXIC', name: '那斯達克指數', category: '美股四大指數' },

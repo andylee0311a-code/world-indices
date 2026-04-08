@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TrendingUp, TrendingDown, Clock, Activity, Globe, Zap, Sparkles, RefreshCcw, AlertTriangle, LayoutGrid, List, ArrowUp, X, ExternalLink } from 'lucide-react';
 
-// 初始資料：作為畫面初次載入的版型框架
+// 初始資料：作為畫面初次載入的版型框架 (已將台指期替換為 TSM 與 USD/TWD)
 const INITIAL_MARKET_DATA = [
   { id: 'tw-taiex', symbol: '^TWII', name: '台灣加權指數', category: '台灣市場', price: 0, change: 0, pct: 0 },
-  { id: 'tw-txn', symbol: 'TWN=F', name: '台指期 (電子盤)', category: '台灣市場', price: 0, change: 0, pct: 0 },
-  { id: 'tw-tx-all', symbol: 'TX=F', name: '台指近全', category: '台灣市場', price: 0, change: 0, pct: 0 },
+  { id: 'tw-tsm', symbol: 'TSM', name: '台積電 ADR', category: '台灣市場', price: 0, change: 0, pct: 0 },
+  { id: 'tw-usdtwd', symbol: 'TWD=X', name: '美元兌台幣', category: '台灣市場', price: 0, change: 0, pct: 0 },
   
   { id: 'us-dji', symbol: '^DJI', name: '道瓊工業指數', category: '美股四大指數', price: 0, change: 0, pct: 0 },
   { id: 'us-spx', symbol: '^GSPC', name: '標普 500 指數', category: '美股四大指數', price: 0, change: 0, pct: 0 },
@@ -61,7 +61,11 @@ const IndexCard = ({ data, viewMode, isFirstLoad }) => {
   const Icon = isPositive ? TrendingUp : TrendingDown;
   const sign = isPositive ? '+' : '';
 
-  const formatNumber = (num) => Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // 匯率需要顯示到小數點後 3 位，其他則顯示 2 位
+  const isCurrency = data.symbol === 'TWD=X';
+  const fractionDigits = isCurrency ? 3 : 2;
+
+  const formatNumber = (num) => Number(num).toLocaleString('en-US', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
   
   const yahooLink = `https://finance.yahoo.com/quote/${data.symbol}`;
 
@@ -127,7 +131,7 @@ export default function App() {
   const [aiError, setAiError] = useState("");
   const [showTopBtn, setShowTopBtn] = useState(false);
   const [apiStatus, setApiStatus] = useState("等待同步...");
-  const [isFirstLoad, setIsFirstLoad] = useState(true); // 新增：用來解除無限轉圈圈的狀態
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -163,7 +167,6 @@ export default function App() {
         const symbols = INITIAL_MARKET_DATA.map(item => item.symbol).join(',');
         const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
 
-        // 1. 嘗試呼叫 Vercel 後端 API (優先)
         let backendSuccess = false;
         // 判斷是否在本機端(Localhost)或預覽環境
         const isLocalOrPreview = typeof window !== 'undefined' && 
@@ -181,9 +184,7 @@ export default function App() {
           }
         }
 
-        // 2. 備用方案：如果後端沒通 (例如在 Localhost 開發中)，切換至高穩定度的備用代理
         if (!backendSuccess) {
-          // 改用較穩定的 allorigins 代理服務，避免 corsproxy.io 被封鎖的問題
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
           const response = await fetch(proxyUrl);
           
@@ -195,7 +196,6 @@ export default function App() {
           }
         }
 
-        // 3. 更新畫面資料
         if (fetchedQuotes.length > 0) {
           setMarketData(prev => prev.map(item => {
             const quote = fetchedQuotes.find(q => q.symbol === item.symbol || q.id === item.id);
@@ -220,22 +220,27 @@ export default function App() {
       }
     };
 
-    // 啟動立即抓取，抓完後解除 isFirstLoad 狀態
     fetchYahooData().finally(() => setIsFirstLoad(false));
     
-    // 隨後每 8 秒嚴格輪詢一次雅虎真實資料
     const interval = setInterval(fetchYahooData, 8000); 
     return () => clearInterval(interval);
   }, [isLive]);
 
-  // AI 盤勢分析
   const generateMarketAnalysis = async () => {
     setIsAnalyzing(true);
     setAiError("");
     
-    // 🔴 上 Vercel 前請務必改回： const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    // 🔴 為了避免在非 Vercel 環境中報錯，此處留空。
+    // 在推送到 Vercel 前，若要啟用 AI 分析，請手動將下方改為：
+    // const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
     
+    if (!apiKey) {
+      setAiError("AI 分析已被停用：請在程式碼中設定您的 Gemini API Key。");
+      setIsAnalyzing(false);
+      return;
+    }
+
     const validData = marketData.filter(d => d.price > 0);
     const marketSummary = validData.map(d => 
       `${d.name}: ${d.price.toFixed(2)} (${d.change >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)`
@@ -263,7 +268,7 @@ export default function App() {
         if (text) { setAiAnalysis(text.replace(/\*\*/g, '')); break; }
       } catch (error) {
         retries--;
-        if (retries === 0) { setAiError(`AI 連線失敗：請確認 API Key`); setAiAnalysis(""); }
+        if (retries === 0) { setAiError(`AI 連線失敗：請確認 API Key 是否正確設定`); setAiAnalysis(""); }
         else await new Promise(r => setTimeout(r, 1000));
       }
     }
@@ -350,9 +355,7 @@ export default function App() {
           <section key={category}>
             <h2 className="text-xl font-bold mb-4 flex items-center text-gray-200"><div className="w-1.5 h-6 bg-blue-500 rounded-full mr-3"></div>{category}</h2>
             <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "flex flex-col space-y-2"}>
-              {marketData.filter(item => item.category === category).map(item => (
-                <IndexCard key={item.id} data={item} viewMode={viewMode} isFirstLoad={isFirstLoad} />
-              ))}
+              {marketData.filter(item => item.category === category).map(item => <IndexCard key={item.id} data={item} viewMode={viewMode} isFirstLoad={isFirstLoad} />)}
             </div>
           </section>
         ))}
