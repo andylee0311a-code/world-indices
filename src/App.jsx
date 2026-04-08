@@ -25,7 +25,7 @@ const INITIAL_MARKET_DATA = [
 const DEFAULT_AI_TEXT = "點擊上方按鈕，AI 將為您擷取最新市場數據並產生即時盤勢解析。";
 
 // 單一指數卡片元件 (已升級為可點擊連動至雅虎財經的連結)
-const IndexCard = ({ data, viewMode }) => {
+const IndexCard = ({ data, viewMode, isFirstLoad }) => {
   const [flashColor, setFlashColor] = useState('transparent');
   const prevPriceRef = useRef(data.price);
 
@@ -40,12 +40,18 @@ const IndexCard = ({ data, viewMode }) => {
     }
   }, [data.price]);
 
-  // 資料尚未載入時顯示 Loading 狀態
+  // 資料尚未載入時，根據是否為初次載入來決定顯示 Loading 還是 暫無報價
   if (data.price === 0) {
     return (
-      <div className={`relative overflow-hidden rounded-xl bg-gray-800 border border-gray-700 p-5 shadow-lg flex justify-center items-center h-[116px] animate-pulse ${viewMode === 'list' ? 'h-[72px] flex-row justify-start p-3' : ''}`}>
-        <div className="w-5 h-5 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mr-3"></div>
-        <span className="text-gray-500 text-sm">同步雅虎報價中...</span>
+      <div className={`relative overflow-hidden rounded-xl bg-gray-800 border border-gray-700 p-5 shadow-lg flex justify-center items-center h-[116px] ${isFirstLoad ? 'animate-pulse' : ''} ${viewMode === 'list' ? 'h-[72px] flex-row justify-start p-3' : ''}`}>
+        {isFirstLoad ? (
+          <>
+            <div className="w-5 h-5 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mr-3"></div>
+            <span className="text-gray-500 text-sm">同步雅虎報價中...</span>
+          </>
+        ) : (
+          <span className="text-gray-500 text-sm">雅虎目前暫無報價</span>
+        )}
       </div>
     );
   }
@@ -57,7 +63,6 @@ const IndexCard = ({ data, viewMode }) => {
 
   const formatNumber = (num) => Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   
-  // 點擊卡片跳轉至 Yahoo Finance 對應頁面
   const yahooLink = `https://finance.yahoo.com/quote/${data.symbol}`;
 
   if (viewMode === 'list') {
@@ -122,6 +127,7 @@ export default function App() {
   const [aiError, setAiError] = useState("");
   const [showTopBtn, setShowTopBtn] = useState(false);
   const [apiStatus, setApiStatus] = useState("等待同步...");
+  const [isFirstLoad, setIsFirstLoad] = useState(true); // 新增：用來解除無限轉圈圈的狀態
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -142,7 +148,7 @@ export default function App() {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   // ==========================================
-  // 純淨的 Yahoo 同步引擎 (無任何假亂數模擬)
+  // 純淨且高容錯的 Yahoo 同步引擎
   // ==========================================
   useEffect(() => {
     if (!isLive) {
@@ -153,35 +159,47 @@ export default function App() {
     const fetchYahooData = async () => {
       try {
         setApiStatus("連線 Yahoo 同步中...");
-        const isCanvasPreview = typeof window !== 'undefined' && window.location.origin.startsWith('blob:');
         let fetchedQuotes = [];
+        const symbols = INITIAL_MARKET_DATA.map(item => item.symbol).join(',');
+        const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
 
-        if (isCanvasPreview) {
-          // 在預覽環境直接使用 CORS Proxy 抓取 Yahoo API
-          const symbols = INITIAL_MARKET_DATA.map(item => item.symbol).join(',');
-          const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
-          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+        // 1. 嘗試呼叫 Vercel 後端 API (優先)
+        let backendSuccess = false;
+        // 判斷是否在本機端(Localhost)或預覽環境
+        const isLocalOrPreview = typeof window !== 'undefined' && 
+          (window.location.origin.startsWith('blob:') || window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'));
+
+        if (!isLocalOrPreview) {
+          try {
+            const res = await fetch('/api/market');
+            if (res.ok) {
+              fetchedQuotes = await res.json();
+              backendSuccess = true;
+            }
+          } catch (e) {
+            console.warn("後端 API 連線失敗，切換備用方案...");
+          }
+        }
+
+        // 2. 備用方案：如果後端沒通 (例如在 Localhost 開發中)，切換至高穩定度的備用代理
+        if (!backendSuccess) {
+          // 改用較穩定的 allorigins 代理服務，避免 corsproxy.io 被封鎖的問題
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
           const response = await fetch(proxyUrl);
           
           if (response.ok) {
             const data = await response.json();
             fetchedQuotes = data.quoteResponse?.result || [];
-          }
-        } else {
-          // 在 Vercel 正式機，呼叫我們寫好的後端
-          const response = await fetch('/api/market');
-          if (response.ok) {
-            fetchedQuotes = await response.json();
+          } else {
+            throw new Error('代理伺服器連線失敗');
           }
         }
 
+        // 3. 更新畫面資料
         if (fetchedQuotes.length > 0) {
           setMarketData(prev => prev.map(item => {
             const quote = fetchedQuotes.find(q => q.symbol === item.symbol || q.id === item.id);
-            
-            // 嚴格將 Yahoo 真實回傳的欄位寫入畫面 (若 Yahoo 回傳 null 則保持不變)
             if (quote) {
-               // 判斷資料來源是 Yahoo 原生格式還是 Vercel 後端整理過的格式
                const currentPrice = quote.regularMarketPrice ?? quote.price;
                const currentChange = quote.regularMarketChange ?? quote.change;
                const currentPct = quote.regularMarketChangePercent ?? quote.pct;
@@ -202,10 +220,11 @@ export default function App() {
       }
     };
 
-    // 啟動立即抓取，隨後每 8 秒嚴格輪詢一次雅虎真實資料
-    fetchYahooData();
-    const interval = setInterval(fetchYahooData, 8000); 
+    // 啟動立即抓取，抓完後解除 isFirstLoad 狀態
+    fetchYahooData().finally(() => setIsFirstLoad(false));
     
+    // 隨後每 8 秒嚴格輪詢一次雅虎真實資料
+    const interval = setInterval(fetchYahooData, 8000); 
     return () => clearInterval(interval);
   }, [isLive]);
 
@@ -217,7 +236,6 @@ export default function App() {
     // 🔴 上 Vercel 前請務必改回： const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
     
-    // 只取已經成功載入真實價格的項目餵給 AI
     const validData = marketData.filter(d => d.price > 0);
     const marketSummary = validData.map(d => 
       `${d.name}: ${d.price.toFixed(2)} (${d.change >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)`
@@ -332,7 +350,9 @@ export default function App() {
           <section key={category}>
             <h2 className="text-xl font-bold mb-4 flex items-center text-gray-200"><div className="w-1.5 h-6 bg-blue-500 rounded-full mr-3"></div>{category}</h2>
             <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "flex flex-col space-y-2"}>
-              {marketData.filter(item => item.category === category).map(item => <IndexCard key={item.id} data={item} viewMode={viewMode} />)}
+              {marketData.filter(item => item.category === category).map(item => (
+                <IndexCard key={item.id} data={item} viewMode={viewMode} isFirstLoad={isFirstLoad} />
+              ))}
             </div>
           </section>
         ))}
