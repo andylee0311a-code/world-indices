@@ -160,55 +160,62 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isLive]);
 
-  // AI 盤勢分析
+  // 🚀 AI 盤勢分析：大師級 2026 最終修正版
   const generateMarketAnalysis = async () => {
     setIsAnalyzing(true);
     setAiError("");
     
-    // 🔴 關鍵點：如果你要推送到 Vercel，請務必手動改回下面這行：
-    // const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    // 這裡為了讓你在 Canvas 預覽不出錯，暫時留空（系統會自動注入）
-   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    // 1. 安全讀取 API Key (請確保 Vercel 後台 VITE_GEMINI_API_KEY 設定正確)
+    // 💡 提醒：若在本地開發，請改回 import.meta.env.VITE_GEMINI_API_KEY
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
     
+    if (!apiKey) {
+      setAiError("找不到 API Key。請確認 Vercel 環境變數 VITE_GEMINI_API_KEY 是否已設定並重新部署。");
+      setIsAnalyzing(false);
+      return;
+    }
+
     const marketSummary = marketData.map(d => 
       `${d.name}: ${d.price.toFixed(2)} (${d.change >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)`
     ).join('\n');
 
-    const promptText = `請根據以下報價並結合最新國際財經新聞給出 200 字專業分析：\n${marketSummary}\n請用繁體中文。`;
+    const promptText = `你是一位專業分析師，請針對以下全球盤勢給出 200 字繁體中文分析：\n${marketSummary}`;
 
-    // 🌟 使用最穩定的模型名稱，避免 404
-    // 在 Vercel 環境中，請使用 "gemini-1.5-flash"
-    const modelName = apiKey ? "gemini-1.5-flash" : "gemini-2.5-flash-preview-09-2025";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+    // 🌟 2026 年最強穩定組合：v1 正式端點 + gemini-3-flash
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-3-flash:generateContent?key=${apiKey}`;
 
     const payload = {
       contents: [{ parts: [{ text: promptText }] }],
-      systemInstruction: { parts: [{ text: "你是專業財經分析師，請用繁體中文回答。" }] },
+      systemInstruction: { parts: [{ text: "你是專業財經分析師，請用繁體中文回答，並注意台灣紅漲綠跌的習慣。" }] },
       tools: [{ google_search: {} }] 
     };
 
-    let retries = 3;
-    while (retries > 0) {
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) throw new Error(`Status: ${response.status}`);
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          setAiAnalysis(text.replace(/\*\*/g, ''));
-          break;
-        }
-      } catch (error) {
-        retries--;
-        if (retries === 0) setAiError(`AI 連線失敗: ${error.message}`);
-        else await new Promise(r => setTimeout(r, 1000));
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      const data = await response.json();
+
+      if (!response.ok) {
+        // 如果還是 404，通常是 API Key 沒權限，這裡直接報出詳細錯誤
+        throw new Error(data.error?.message || `HTTP ${response.status}`);
       }
+      
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        setAiAnalysis(text.replace(/\*\*/g, ''));
+      } else {
+        throw new Error("AI 回傳格式不正確");
+      }
+    } catch (error) {
+      console.error("DEBUG 詳情:", error);
+      setAiError(`AI 分析失敗：${error.message}`);
+    } finally {
+      setIsAnalyzing(false);
     }
-    setIsAnalyzing(false);
   };
 
   const categories = [...new Set(marketData.map(item => item.category))];
