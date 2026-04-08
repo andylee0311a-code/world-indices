@@ -1,20 +1,31 @@
-import yahooFinance from 'yahoo-finance2';
-
 export default async function handler(req, res) {
-  // 股市代號對照表 (對應 Yahoo Finance 的 Ticker 格式)
-  const symbols = [
+  // 1. 設定 CORS 標頭，允許前端跨域請求
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+  // 處理 OPTIONS 預檢請求
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  // 2. 定義要抓取的全球指數與期貨代號 (與前端完全對應)
+  const SYMBOLS_MAP = [
     { id: 'tw-taiex', symbol: '^TWII', name: '台灣加權指數', category: '台灣市場' },
-    // 注意：Yahoo Finance 沒有提供即時的「台指期夜盤」數據，實務上需串接台灣券商 API。這裡我們先略過台指期。
+    { id: 'tw-txn', symbol: 'TWN=F', name: '台指期 (電子盤)', category: '台灣市場' },
+    { id: 'tw-tx-all', symbol: 'TX=F', name: '台指近全', category: '台灣市場' },
     
     { id: 'us-dji', symbol: '^DJI', name: '道瓊工業指數', category: '美股四大指數' },
     { id: 'us-spx', symbol: '^GSPC', name: '標普 500 指數', category: '美股四大指數' },
     { id: 'us-ndx', symbol: '^IXIC', name: '那斯達克指數', category: '美股四大指數' },
     { id: 'us-sox', symbol: '^SOX', name: '費城半導體', category: '美股四大指數' },
-
+    
     { id: 'fut-ym', symbol: 'YM=F', name: '小道瓊期貨 (YM)', category: '美股期貨' },
     { id: 'fut-es', symbol: 'ES=F', name: '小標普期貨 (ES)', category: '美股期貨' },
     { id: 'fut-nq', symbol: 'NQ=F', name: '小那斯達克 (NQ)', category: '美股期貨' },
-
+    
     { id: 'asia-nikkei', symbol: '^N225', name: '日經 225 指數', category: '亞洲股市' },
     { id: 'asia-kospi', symbol: '^KS11', name: '韓國 KOSPI', category: '亞洲股市' },
     { id: 'asia-hsi', symbol: '^HSI', name: '香港恆生指數', category: '亞洲股市' },
@@ -22,31 +33,43 @@ export default async function handler(req, res) {
   ];
 
   try {
-    // 將我們需要的代號抽出來變成陣列 ['^TWII', '^DJI', ...]
-    const queries = symbols.map(s => s.symbol);
+    // 將代號組合成 Yahoo API 需要的格式 (例如: ^TWII,TWN=F,^DJI...)
+    const symbolsString = SYMBOLS_MAP.map(s => s.symbol).join(',');
     
-    // 向 Yahoo Finance 發起一次性的批量請求，這是最高效的作法！
-    const quotes = await yahooFinance.quote(queries);
+    // 使用 Yahoo Finance 輕量級 Quote API，一次抓回所有最新報價
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsString}`;
 
-    // 將 Yahoo 回傳的複雜資料，整理成我們前端 React 需要的乾淨格式
-    const marketData = symbols.map(s => {
-      const quote = quotes.find(q => q.symbol === s.symbol);
-      if (!quote) return null;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Yahoo API 請求失敗，狀態碼: ${response.status}`);
+    }
 
-      return {
-        id: s.id,
-        name: s.name,
-        category: s.category,
-        price: quote.regularMarketPrice || 0,
-        change: quote.regularMarketChange || 0,
-        pct: quote.regularMarketChangePercent || 0
-      };
-    }).filter(Boolean); // 過濾掉空資料
+    const data = await response.json();
+    const quotes = data.quoteResponse.result;
 
-    // 回傳 JSON 給前端
-    res.status(200).json(marketData);
+    // 3. 將 Yahoo 回傳的資料重新整理成前端好閱讀的格式
+    const formattedData = SYMBOLS_MAP.map(item => {
+      // 從回傳陣列中找出對應代碼的資料
+      const quote = quotes.find(q => q.symbol === item.symbol);
+      
+      if (quote) {
+        return {
+          ...item,
+          price: quote.regularMarketPrice || 0,
+          change: quote.regularMarketChange || 0,
+          pct: quote.regularMarketChangePercent || 0
+        };
+      } else {
+        // 萬一有找不到的項目 (例如期貨非交易時段)，回傳 0 交給前端處理 (模擬跳動)
+        return { ...item, price: 0, change: 0, pct: 0 };
+      }
+    });
+
+    // 4. 將整理好的資料回傳給前端
+    res.status(200).json(formattedData);
+    
   } catch (error) {
-    console.error("Yahoo API 錯誤:", error);
-    res.status(500).json({ error: '無法獲取市場數據' });
+    console.error("Vercel API 伺服器錯誤:", error);
+    res.status(500).json({ error: '獲取市場報價失敗' });
   }
 }
