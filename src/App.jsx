@@ -234,7 +234,7 @@ export default function App() {
     setAiError("");
     
     // 🔴 上 Vercel 前請務必改回： const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
- const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
     
     const validData = marketData.filter(d => d.price > 0);
     const marketSummary = validData.map(d => 
