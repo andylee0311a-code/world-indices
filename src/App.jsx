@@ -215,7 +215,7 @@ export default function App() {
     setAiError("");
     
     // 🔴 上 Vercel 前請務必改回： const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    const apiKey = ""; 
+ const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
     
     // 只取已經成功載入真實價格的項目餵給 AI
     const validData = marketData.filter(d => d.price > 0);
