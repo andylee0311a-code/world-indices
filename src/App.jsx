@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+// 🌟 新增了 X 圖示用來做關閉按鈕
 import { TrendingUp, TrendingDown, Clock, Activity, Globe, Zap, Sparkles, RefreshCcw, AlertTriangle, LayoutGrid, List, ArrowUp, X } from 'lucide-react';
 
 // 初始模擬資料
@@ -19,6 +20,7 @@ const INITIAL_MARKET_DATA = [
   { id: 'asia-kospi', name: '韓國 KOSPI', category: '亞洲股市', price: 2750.60, change: -12.30, pct: -0.45 },
 ];
 
+// 預設的 AI 提示文字
 const DEFAULT_AI_TEXT = "點擊上方按鈕，AI 將為您擷取最新市場數據並產生即時盤勢解析。";
 
 // 單一指數卡片元件
@@ -76,7 +78,7 @@ const IndexCard = ({ data, viewMode }) => {
     );
   }
 
-  // 塊狀卡片檢視 (Grid View - 預設)
+  // 塊狀卡片檢視 (Grid View)
   return (
     <div 
       className="relative overflow-hidden rounded-xl bg-gray-800 border border-gray-700 p-5 shadow-lg transition-all duration-300 hover:border-gray-500"
@@ -113,6 +115,7 @@ export default function App() {
   
   const [fontSizeScale, setFontSizeScale] = useState(1);
 
+  // 初始化使用預設文字
   const [aiAnalysis, setAiAnalysis] = useState(DEFAULT_AI_TEXT);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiError, setAiError] = useState("");
@@ -124,6 +127,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // 字型縮放
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontSizeScale * 100}%`;
     return () => {
@@ -131,45 +135,35 @@ export default function App() {
     };
   }, [fontSizeScale]);
 
-  // 監聽滾動事件，控制「回頁首」按鈕的顯示與隱藏
+  // 監聽滾動事件，控制「回頁首」按鈕
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 300) {
-        setShowTopBtn(true);
-      } else {
-        setShowTopBtn(false);
-      }
+      setShowTopBtn(window.scrollY > 300);
     };
-
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 平滑捲動至頁首
   const scrollToTop = () => {
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth'
-    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // 真實 API 報價引擎與 fallback 機制
+  // 真實 API 報價引擎與 fallback 機制 (含台指期合併保留邏輯)
   useEffect(() => {
     if (!isLive) return;
 
     const fetchMarketData = async () => {
       try {
-        // 在預覽環境 (blob:) 或無法解析相對路徑的環境中，強制使用 fallback
         if (typeof window !== 'undefined' && window.location.origin.startsWith('blob:')) {
-          throw new Error('Fallback to mock engine'); 
+          throw new Error('Canvas mode'); 
         }
 
         const response = await fetch('/api/market');
-        if (!response.ok) throw new Error('網路回應錯誤');
+        if (!response.ok) throw new Error('API Error');
         
         const data = await response.json();
+        
         if (data && data.length > 0) {
-          // 使用智能合併，確保沒有在 API 回傳名單裡的項目（如台指期）不會消失
           setMarketData(prevData => {
             return prevData.map(item => {
               const apiItem = data.find(d => d.id === item.id);
@@ -193,39 +187,30 @@ export default function App() {
           });
         }
       } catch (error) {
-        // 無法獲取真實 API (如 Canvas 預覽模式) 時，自動切換為模擬跳動
-        setMarketData(prevData => {
-          return prevData.map(item => {
-            if (Math.random() > 0.3) return item;
-            const volatility = (Math.random() - 0.5) * 0.001; 
-            const priceChange = item.price * volatility;
-            const newPrice = item.price + priceChange;
-            const newChange = item.change + priceChange;
-            const newPct = (newChange / (item.price - item.change)) * 100;
-
-            return {
-              ...item,
-              price: newPrice,
-              change: newChange,
-              pct: newPct
-            };
-          });
-        });
+        setMarketData(prev => prev.map(item => {
+          if (Math.random() > 0.3) return item;
+          const vol = (Math.random() - 0.5) * 0.001; 
+          const diff = item.price * vol;
+          return { ...item, price: item.price + diff, change: item.change + diff, pct: ((item.change + diff) / (item.price - item.change)) * 100 };
+        }));
       }
     };
 
     fetchMarketData();
     const interval = setInterval(fetchMarketData, 2000);
-
     return () => clearInterval(interval);
   }, [isLive]);
 
-  // 呼叫 Gemini API 進行盤勢分析
+  // AI 盤勢分析
   const generateMarketAnalysis = async () => {
     setIsAnalyzing(true);
     setAiError("");
     
-    // 將會報錯的 import.meta 寫法替換為空字串，以適應預覽環境
+    // =====================================================================
+    // 🔴 【發布上線前必看】 🔴
+    // 若在本地環境推送到 Vercel，請務必改為： 
+    // const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    // =====================================================================
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
     
     const marketSummary = marketData.map(d => 
@@ -243,19 +228,16 @@ export default function App() {
     3. 結尾給出一個簡短的短線觀察重點。
     4. 請使用繁體中文。`;
 
+    // 🌟 保留昨日除錯成功的終極設定：v1beta 端點 + gemini-2.5-flash
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
     const payload = {
       contents: [{ parts: [{ text: promptText }] }],
-      systemInstruction: {
-        parts: [{ text: "你是一位專業的華爾街與台灣雙棲財經分析師。請用繁體中文回答，語氣專業冷靜。請記得台灣股市的習慣是紅色代表上漲，綠色代表下跌。" }]
-      },
+      systemInstruction: { parts: [{ text: "你是專業財經分析師，請用繁體中文回答，並注意台灣紅漲綠跌的習慣。" }] },
       tools: [{ google_search: {} }] 
     };
 
     let retries = 3;
-    let delay = 1000;
-    
     while (retries > 0) {
       try {
         const response = await fetch(url, {
@@ -263,31 +245,17 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(`API 請求失敗: ${response.status} - ${errorData.error?.message || '未知錯誤'}`);
-        }
-        
+        if (!response.ok) throw new Error(`Status: ${response.status}`);
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        
         if (text) {
           setAiAnalysis(text.replace(/\*\*/g, ''));
           break;
-        } else {
-          throw new Error("無法解析 AI 回應");
         }
       } catch (error) {
         retries--;
-        console.error("AI 分析錯誤:", error);
-        if (retries === 0) {
-          setAiError(`AI 伺服器連線失敗：${error.message}`);
-          setAiAnalysis("");
-        } else {
-          await new Promise(res => setTimeout(res, delay));
-          delay *= 2;
-        }
+        if (retries === 0) setAiError(`AI 連線失敗: ${error.message}`);
+        else await new Promise(r => setTimeout(r, 1000));
       }
     }
     setIsAnalyzing(false);
@@ -301,67 +269,28 @@ export default function App() {
         <div>
           <h1 className="text-3xl font-extrabold flex items-center bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-300">
             <Globe className="mr-3 text-blue-400" size={32} />
-            全球股市與期貨即時監控
+            全球股市即時監控
           </h1>
-          <p className="text-gray-400 mt-2 text-sm flex items-center">
-            採用台灣市場慣用色彩標示 ( <span className="text-red-500 mx-1 font-bold">紅漲</span> / <span className="text-green-500 mx-1 font-bold">綠跌</span> )
-          </p>
+          <p className="text-gray-400 mt-2 text-sm">紅漲綠跌指標系統</p>
         </div>
         
-        <div className="mt-4 md:mt-0 flex flex-col items-end">
-          <div className="flex items-center bg-gray-800 rounded-full px-4 py-2 border border-gray-700 shadow-inner">
+        <div className="mt-4 md:mt-0 flex flex-col items-end gap-3">
+          <div className="flex items-center bg-gray-800 rounded-full px-4 py-2 border border-gray-700">
             <Clock size={16} className="text-gray-400 mr-2" />
-            <span className="font-mono text-sm tracking-wider text-teal-100">
-              {currentTime.toLocaleDateString('zh-TW')} {currentTime.toLocaleTimeString('zh-TW')}
-            </span>
+            <span className="font-mono text-sm">{currentTime.toLocaleString('zh-TW')}</span>
           </div>
-          
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <div className="flex items-center bg-gray-800 rounded-lg p-1 border border-gray-700">
-              <button 
-                onClick={() => setFontSizeScale(prev => Math.max(0.7, prev - 0.1))}
-                className="p-1.5 px-2.5 rounded-md text-gray-400 hover:text-gray-200 hover:bg-gray-700 font-bold transition-colors"
-                title="縮小字型"
-              >
-                A-
-              </button>
-              <span className="text-gray-400 text-xs font-mono px-2 min-w-[3rem] text-center">
-                {Math.round(fontSizeScale * 100)}%
-              </span>
-              <button 
-                onClick={() => setFontSizeScale(prev => Math.min(1.5, prev + 0.1))}
-                className="p-1.5 px-2.5 rounded-md text-gray-400 hover:text-gray-200 hover:bg-gray-700 font-bold transition-colors"
-                title="放大字型"
-              >
-                A+
-              </button>
-            </div>
-
+          <div className="flex gap-2">
             <div className="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
-              <button 
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-gray-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-                title="塊狀檢視"
-              >
-                <LayoutGrid size={16} />
-              </button>
-              <button 
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-gray-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-                title="條列式檢視"
-              >
-                <List size={16} />
-              </button>
+              <button onClick={() => setFontSizeScale(s => Math.max(0.7, s - 0.1))} className="px-2 font-bold text-gray-400 hover:text-white">A-</button>
+              <span className="px-2 text-xs self-center text-gray-400">{Math.round(fontSizeScale * 100)}%</span>
+              <button onClick={() => setFontSizeScale(s => Math.min(1.5, s + 0.1))} className="px-2 font-bold text-gray-400 hover:text-white">A+</button>
             </div>
-
-            <button 
-              onClick={() => setIsLive(!isLive)}
-              className={`flex items-center text-xs font-bold px-3 py-1.5 rounded-full transition-all duration-300 ${
-                isLive ? 'bg-red-900/50 text-red-400 border border-red-800 hover:bg-red-900/70' : 'bg-gray-800 text-gray-400 border border-gray-600 hover:bg-gray-700'
-              }`}
-            >
-              <Zap size={14} className={`mr-1 ${isLive ? 'animate-pulse' : ''}`} />
-              {isLive ? 'LIVE 報價連線中' : '報價已暫停'}
+            <div className="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
+              <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white'}`}><LayoutGrid size={16} /></button>
+              <button onClick={() => setViewMode('list')} className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white'}`}><List size={16} /></button>
+            </div>
+            <button onClick={() => setIsLive(!isLive)} className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${isLive ? 'bg-red-900/50 text-red-400 border border-red-800' : 'bg-gray-800 text-gray-500 border border-gray-700'}`}>
+              {isLive ? '● LIVE' : 'PAUSED'}
             </button>
           </div>
         </div>
@@ -372,27 +301,23 @@ export default function App() {
           <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
           
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 relative z-10">
-            <div className="flex items-center">
-              <div className="bg-indigo-500/20 p-2 rounded-lg mr-3 border border-indigo-500/30">
-                <Sparkles className="text-indigo-400" size={24} />
+            <h2 className="text-xl font-bold flex items-center text-indigo-100">
+              <div className="bg-indigo-500/20 p-1.5 rounded-lg mr-3 border border-indigo-500/30">
+                <Sparkles className="text-indigo-400" size={20} />
               </div>
-              <h2 className="text-xl font-bold text-indigo-100">AI 智能盤勢洞察</h2>
-            </div>
+              AI 智能盤勢洞察
+            </h2>
             <button 
-              onClick={generateMarketAnalysis}
-              disabled={isAnalyzing}
-              className={`mt-4 md:mt-0 flex items-center px-5 py-2.5 rounded-lg font-bold text-sm transition-all shadow-lg ${
-                isAnalyzing 
-                  ? 'bg-indigo-800/50 text-indigo-300 cursor-not-allowed border border-indigo-700/50' 
-                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white border border-indigo-400/50 hover:shadow-indigo-500/25 hover:-translate-y-0.5'
-              }`}
+              onClick={generateMarketAnalysis} 
+              disabled={isAnalyzing} 
+              className="mt-4 md:mt-0 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 disabled:opacity-50 flex items-center shadow-lg transition-transform hover:-translate-y-0.5 font-medium text-sm"
             >
-              <RefreshCcw size={16} className={`mr-2 ${isAnalyzing ? 'animate-spin' : ''}`} />
-              {isAnalyzing ? '✨ AI 正在分析即時盤勢...' : '✨ 產生最新盤勢報告'}
+              <RefreshCcw size={16} className={`mr-2 ${isAnalyzing ? 'animate-spin' : ''}`} /> 
+              {isAnalyzing ? '分析中...' : '產生最新盤勢報告'}
             </button>
           </div>
-
-          <div className="bg-gray-900/60 rounded-xl p-5 border border-indigo-500/20 text-gray-300 leading-relaxed text-sm md:text-base min-h-[100px] relative z-10 backdrop-blur-sm">
+          
+          <div className="bg-gray-900/60 rounded-xl p-5 border border-indigo-500/20 min-h-[100px] relative z-10 backdrop-blur-sm">
             {isAnalyzing ? (
               <div className="flex flex-col items-center justify-center py-4 space-y-3">
                 <div className="flex space-x-2">
@@ -409,7 +334,7 @@ export default function App() {
               </div>
             ) : (
               <div className="relative group">
-                {/* 加入關閉分析報告按鈕 */}
+                {/* 🌟 只有當文字不是預設文字時，才顯示關閉按鈕 */}
                 {aiAnalysis !== DEFAULT_AI_TEXT && (
                   <button
                     onClick={() => setAiAnalysis(DEFAULT_AI_TEXT)}
@@ -419,42 +344,36 @@ export default function App() {
                     <X size={16} />
                   </button>
                 )}
-                <p className="whitespace-pre-line pr-6">{aiAnalysis}</p>
+                <p className="whitespace-pre-line pr-6 text-gray-300 leading-relaxed">{aiAnalysis}</p>
               </div>
             )}
           </div>
         </section>
 
-        {categories.map(category => (
-          <section key={category}>
-            <div className="flex items-center mb-4">
-              <div className="h-6 w-1.5 bg-blue-500 rounded-full mr-3"></div>
-              <h2 className="text-xl font-bold text-gray-200">{category}</h2>
-            </div>
-            
-            <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "flex flex-col space-y-2"}>
-              {marketData
-                .filter(item => item.category === category)
-                .map(item => (
-                  <IndexCard key={item.id} data={item} viewMode={viewMode} />
-                ))}
+        {categories.map(cat => (
+          <section key={cat}>
+            <h2 className="text-xl font-bold mb-4 flex items-center text-gray-200">
+              <div className="w-1.5 h-6 bg-blue-500 rounded-full mr-3"></div>
+              {cat}
+            </h2>
+            <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "flex flex-col gap-2"}>
+              {marketData.filter(i => i.category === cat).map(i => <IndexCard key={i.id} data={i} viewMode={viewMode} />)}
             </div>
           </section>
         ))}
       </main>
 
-      <footer className="max-w-7xl mx-auto mt-12 pt-6 border-t border-gray-800 text-center text-gray-500 text-xs">
-        <p>© 2026 專業金融儀表板 Prototype. 結合 Gemini 2.5 即時分析與 Google Search Grounding 技術。</p>
+      <footer className="max-w-7xl mx-auto mt-12 pt-6 pb-8 border-t border-gray-800 text-center flex flex-col items-center justify-center">
+        <p className="text-gray-500 text-xs">© 2026 專業金融儀表板 Prototype. 結合 Gemini 即時分析與 Google Search Grounding 技術。</p>
+        <div className="mt-3 inline-block">
+          <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-semibold tracking-wider text-sm shadow-sm">
+            Design by Andy Lee
+          </p>
+        </div>
       </footer>
 
-      {/* 回頁首按鈕 */}
       {showTopBtn && (
-        <button
-          onClick={scrollToTop}
-          className="fixed bottom-8 right-8 z-50 p-3 bg-indigo-600/90 text-white rounded-full shadow-lg hover:bg-indigo-500 hover:-translate-y-1 hover:shadow-indigo-500/50 transition-all duration-300 backdrop-blur-sm focus:outline-none"
-          title="回到頁首"
-          aria-label="回到頁首"
-        >
+        <button onClick={scrollToTop} className="fixed bottom-8 right-8 z-50 p-3 bg-indigo-600/90 text-white rounded-full shadow-lg hover:bg-indigo-500 hover:-translate-y-1 transition-all backdrop-blur-sm">
           <ArrowUp size={24} />
         </button>
       )}
