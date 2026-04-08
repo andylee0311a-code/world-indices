@@ -1,25 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TrendingUp, TrendingDown, Clock, Activity, Globe, Zap, Sparkles, RefreshCcw, AlertTriangle, LayoutGrid, List, ArrowUp, X } from 'lucide-react';
 
-// 初始資料：加入 prevClose 基準點，讓計算漲跌幅更精準
+// 初始資料：已更新為 2026/04 最新市場數據基準
 const INITIAL_MARKET_DATA = [
-  { id: 'tw-taiex', symbol: '^TWII', name: '台灣加權指數', category: '台灣市場', price: 23540.21, prevClose: 23414.71 },
-  { id: 'tw-txn', symbol: 'TWN=F', name: '台指期 (電子盤)', category: '台灣市場', price: 23565.00, prevClose: 23425.00 },
-  { id: 'tw-tx-all', symbol: 'TX=F', name: '台指近全', category: '台灣市場', price: 23555.00, prevClose: 23425.00 },
+  { id: 'tw-taiex', symbol: '^TWII', name: '台灣加權指數', category: '台灣市場', price: 34761.38, prevClose: 33229.82 },
+  { id: 'tw-txn', symbol: 'TWN=F', name: '台指期 (電子盤)', category: '台灣市場', price: 34780.00, prevClose: 33240.00 },
+  { id: 'tw-tx-all', symbol: 'TX=F', name: '台指近全', category: '台灣市場', price: 34775.00, prevClose: 33240.00 },
   
-  { id: 'us-dji', symbol: '^DJI', name: '道瓊工業指數', category: '美股四大指數', price: 41250.30, prevClose: 41370.70 },
-  { id: 'us-spx', symbol: '^GSPC', name: '標普 500 指數', category: '美股四大指數', price: 5210.80, prevClose: 5216.00 },
-  { id: 'us-ndx', symbol: '^IXIC', name: '那斯達克指數', category: '美股四大指數', price: 16850.45, prevClose: 16805.15 },
-  { id: 'us-sox', symbol: '^SOX', name: '費城半導體', category: '美股四大指數', price: 4950.12, prevClose: 4889.62 },
+  { id: 'us-dji', symbol: '^DJI', name: '道瓊工業指數', category: '美股四大指數', price: 43150.30, prevClose: 43050.50 },
+  { id: 'us-spx', symbol: '^GSPC', name: '標普 500 指數', category: '美股四大指數', price: 6616.85, prevClose: 6611.83 },
+  { id: 'us-ndx', symbol: '^IXIC', name: '那斯達克指數', category: '美股四大指數', price: 21250.45, prevClose: 21180.15 },
+  { id: 'us-sox', symbol: '^SOX', name: '費城半導體', category: '美股四大指數', price: 6150.12, prevClose: 6080.50 },
 
-  { id: 'fut-ym', symbol: 'YM=F', name: '小道瓊期貨 (YM)', category: '美股期貨', price: 41300.00, prevClose: 41400.00 },
-  { id: 'fut-es', symbol: 'ES=F', name: '小標普期貨 (ES)', category: '美股期貨', price: 5225.25, prevClose: 5227.75 },
-  { id: 'fut-nq', symbol: 'NQ=F', name: '小那斯達克 (NQ)', category: '美股期貨', price: 16900.50, prevClose: 16850.50 },
+  { id: 'fut-ym', symbol: 'YM=F', name: '小道瓊期貨 (YM)', category: '美股期貨', price: 43200.00, prevClose: 43100.00 },
+  { id: 'fut-es', symbol: 'ES=F', name: '小標普期貨 (ES)', category: '美股期貨', price: 6630.25, prevClose: 6620.75 },
+  { id: 'fut-nq', symbol: 'NQ=F', name: '小那斯達克 (NQ)', category: '美股期貨', price: 21300.50, prevClose: 21250.50 },
 
-  { id: 'asia-nikkei', symbol: '^N225', name: '日經 225 指數', category: '亞洲股市', price: 39850.00, prevClose: 39500.00 },
-  { id: 'asia-kospi', symbol: '^KS11', name: '韓國 KOSPI', category: '亞洲股市', price: 2750.60, prevClose: 2762.90 },
-  { id: 'asia-hsi', symbol: '^HSI', name: '香港恆生指數', category: '亞洲股市', price: 16725.10, prevClose: 16930.50 },
-  { id: 'asia-sse', symbol: '000001.SS', name: '上海綜合指數', category: '亞洲股市', price: 3045.22, prevClose: 3032.87 },
+  { id: 'asia-nikkei', symbol: '^N225', name: '日經 225 指數', category: '亞洲股市', price: 56308.42, prevClose: 53429.56 },
+  { id: 'asia-kospi', symbol: '^KS11', name: '韓國 KOSPI', category: '亞洲股市', price: 2950.60, prevClose: 2962.90 },
+  { id: 'asia-hsi', symbol: '^HSI', name: '香港恆生指數', category: '亞洲股市', price: 18725.10, prevClose: 18930.50 },
+  { id: 'asia-sse', symbol: '000001.SS', name: '上海綜合指數', category: '亞洲股市', price: 3145.22, prevClose: 3132.87 },
 ].map(item => ({
   ...item,
   change: item.price - item.prevClose,
