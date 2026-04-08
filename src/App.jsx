@@ -18,6 +18,8 @@ const INITIAL_MARKET_DATA = [
 
   { id: 'asia-nikkei', name: '日經 225 指數', category: '亞洲股市', price: 39850.00, change: 350.00, pct: 0.89 },
   { id: 'asia-kospi', name: '韓國 KOSPI', category: '亞洲股市', price: 2750.60, change: -12.30, pct: -0.45 },
+  { id: 'asia-hsi', name: '香港恆生指數', category: '亞洲股市', price: 16725.10, change: -205.40, pct: -1.21 },
+  { id: 'asia-sse', name: '上海綜合指數', category: '亞洲股市', price: 3045.22, change: 12.35, pct: 0.41 },
 ];
 
 // 預設的 AI 提示文字
@@ -367,7 +369,7 @@ export default function App() {
         <p className="text-gray-500 text-xs">© 2026 專業金融儀表板 Prototype. 結合 Gemini 即時分析與 Google Search Grounding 技術。</p>
         <div className="mt-3 inline-block">
           <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-semibold tracking-wider text-sm shadow-sm">
-            Designed by Andy Lee
+            Design by Andy Lee
           </p>
         </div>
       </footer>
