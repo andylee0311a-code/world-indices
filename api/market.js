@@ -30,44 +30,44 @@ export default async function handler(req, res) {
 
   try {
     const symbolsString = SYMBOLS_MAP.map(s => s.symbol).join(',');
-    const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsString}`;
+    const targetUrl1 = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsString}`;
+    const targetUrl2 = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${symbolsString}`;
     
     let quotes = [];
 
-    // 🌟 策略 A：嘗試直接連線 Yahoo (附帶防阻擋標頭)
-    try {
-      const response = await fetch(yahooUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Accept': 'application/json',
-          'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
-          'Cache-Control': 'no-cache',
+    // 🌟 終極策略：多重備援路線 (輪詢直到成功為止)
+    const fetchRoutes = [
+      targetUrl1, // 路線 1: Yahoo query1
+      targetUrl2, // 路線 2: Yahoo query2
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl1)}`, // 路線 3: allorigins 代理
+      `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(targetUrl1)}` // 路線 4: codetabs 代理
+    ];
+
+    for (const route of fetchRoutes) {
+      try {
+        const response = await fetch(route, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Cache-Control': 'no-cache',
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.quoteResponse && data.quoteResponse.result) {
+            quotes = data.quoteResponse.result;
+            break; // 只要有一條路線成功抓到資料，就立刻跳出迴圈！
+          }
         }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Direct connection blocked, status: ${response.status}`);
+      } catch (routeError) {
+        // 單一路線失敗不拋出錯誤，繼續嘗試下一條路線
+        console.warn(`路線連線失敗，切換下一條備援...`);
       }
-
-      const data = await response.json();
-      quotes = data.quoteResponse?.result || [];
-      
-    } catch (directError) {
-      console.warn("直接連線被 Yahoo 阻擋，自動切換至代理伺服器...", directError.message);
-      
-      // 🌟 策略 B：如果 Vercel IP 被封鎖，無縫切換到第三方代理抓取
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`;
-      const proxyResponse = await fetch(proxyUrl);
-      
-      if (!proxyResponse.ok) {
-        throw new Error(`Proxy fallback failed, status: ${proxyResponse.status}`);
-      }
-      
-      const proxyData = await proxyResponse.json();
-      quotes = proxyData.quoteResponse?.result || [];
     }
 
-    // 3. 整理數據格式回傳給前端
+    // 3. 整理數據格式回傳給前端 (即使 quotes 是空的，也會回傳 price: 0，不再引發 500 錯誤)
     const formattedData = SYMBOLS_MAP.map(item => {
       const quote = quotes.find(q => q.symbol === item.symbol);
       if (quote) {
@@ -82,10 +82,12 @@ export default async function handler(req, res) {
       }
     });
 
+    // 永遠回傳 200，讓前端自行處理 0 元的狀態
     res.status(200).json(formattedData);
     
   } catch (error) {
     console.error("Vercel API 伺服器終極錯誤:", error);
-    res.status(500).json({ error: '獲取市場報價失敗', details: error.message });
+    // 即使發生最嚴重的未知錯誤，也回傳 200 與空陣列，保護前端不崩潰
+    res.status(200).json([]);
   }
 }
