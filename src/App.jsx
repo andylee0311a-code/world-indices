@@ -24,6 +24,67 @@ const INITIAL_MARKET_DATA = [
 
 const DEFAULT_AI_TEXT = "點擊上方按鈕，AI 將為您擷取最新市場數據並產生即時盤勢解析或投資建議。";
 
+// 🌟 新增：微型 SVG 走勢折線圖元件 (Sparkline)
+const Sparkline = ({ id, isPositive }) => {
+  const [pathData, setPathData] = useState('');
+
+  useEffect(() => {
+    // 利用字串 ID 作為種子 (Seed)，讓每個指數產生的震盪波形固定，避免重繪時閃爍
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const random = () => {
+      const x = Math.sin(hash++) * 10000;
+      return x - Math.floor(x);
+    };
+
+    // 參數設定：決定折線圖的點數與起伏
+    const steps = 18;
+    const width = 100;
+    const height = 40;
+    // 上漲時，起點低 (數值高)；下跌時，起點高 (數值低)
+    const startY = isPositive ? height * 0.8 : height * 0.2;
+    const endY = isPositive ? height * 0.2 : height * 0.8;
+    const totalYChange = endY - startY;
+
+    let path = `M 0,${startY}`;
+    for (let i = 1; i <= steps; i++) {
+      const x = (i / steps) * width;
+      const progress = i / steps;
+      const targetY = startY + totalYChange * progress;
+      // 加入隨機震盪製造股市波動感
+      let y = targetY + (random() - 0.5) * (height * 0.45);
+      if (i === steps) y = endY; // 確保最後一點貼合趨勢
+      // 確保不出界
+      y = Math.max(2, Math.min(height - 2, y));
+      path += ` L ${x},${y}`;
+    }
+    setPathData(path);
+  }, [id, isPositive]);
+
+  const strokeColor = isPositive ? 'rgba(239, 68, 68, 0.6)' : 'rgba(34, 197, 94, 0.6)';
+  const fillColor = isPositive ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)';
+  const fillPath = pathData ? `${pathData} L 100,50 L 0,50 Z` : '';
+
+  if (!pathData) return null;
+
+  return (
+    <svg className="w-full h-full" viewBox="0 0 100 45" preserveAspectRatio="none">
+      <path d={fillPath} fill={fillColor} />
+      <path 
+        d={pathData} 
+        fill="none" 
+        stroke={strokeColor} 
+        strokeWidth="1.5" 
+        vectorEffect="non-scaling-stroke" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+      />
+    </svg>
+  );
+};
+
 // 單一指數卡片元件
 const IndexCard = ({ data, viewMode, isFirstLoad }) => {
   const [flashColor, setFlashColor] = useState('transparent');
@@ -97,15 +158,15 @@ const IndexCard = ({ data, viewMode, isFirstLoad }) => {
       href={yahooLink}
       target="_blank"
       rel="noopener noreferrer"
-      className="group block relative overflow-hidden rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm dark:shadow-lg transition-all duration-300 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/20 hover:-translate-y-1"
+      className="group block relative overflow-hidden rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 pb-6 shadow-sm dark:shadow-lg transition-all duration-300 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/20 hover:-translate-y-1"
       style={flashColor !== 'transparent' ? { backgroundColor: flashColor, transition: 'background-color 0.3s ease-out' } : { transition: 'background-color 0.3s ease-out' }}
       title="點擊前往 Yahoo Finance 查看詳情"
     >
-      <div className="flex justify-between items-start mb-2">
+      <div className="relative z-10 flex justify-between items-start mb-1">
         <h3 className="text-gray-700 dark:text-gray-300 font-medium text-lg tracking-wide group-hover:text-gray-900 dark:group-hover:text-white transition-colors">{data.name}</h3>
         <ExternalLink size={16} className="text-gray-400 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
-      <div className="mt-4 flex items-end justify-between">
+      <div className="relative z-10 mt-3 flex items-end justify-between">
         <div className="flex flex-col">
           <span className={`text-3xl font-bold tracking-tight ${colorClass}`}>{formatNumber(data.price)}</span>
           <div className={`flex items-center mt-1 text-sm font-semibold ${colorClass}`}>
@@ -113,6 +174,11 @@ const IndexCard = ({ data, viewMode, isFirstLoad }) => {
             <span>{sign}{formatNumber(data.change)}</span><span className="mx-2 text-gray-300 dark:text-gray-600">|</span><span>{sign}{data.pct.toFixed(2)}%</span>
           </div>
         </div>
+      </div>
+
+      {/* 🌟 插入微型走勢折線圖，僅在大區塊模式 (Grid) 顯示，作為漂亮的背景襯托 */}
+      <div className="absolute bottom-0 left-0 right-0 h-16 opacity-70 group-hover:opacity-100 transition-opacity duration-300 z-0 pointer-events-none">
+        <Sparkline id={data.id} isPositive={isPositive} />
       </div>
     </a>
   );
@@ -128,7 +194,7 @@ export default function App() {
   const [apiStatus, setApiStatus] = useState("等待同步...");
   const [isFirstLoad, setIsFirstLoad] = useState(true);
 
-  // 🌟 主題狀態管理 (預設啟用暗色模式，維持原有視覺)
+  // 主題狀態管理
   const [isDarkMode, setIsDarkMode] = useState(true);
 
   // AI 狀態管理
@@ -245,7 +311,7 @@ export default function App() {
     // 🔴 為了避免在非 Vercel 環境中報錯，此處留空。
     // 在推送到 Vercel 前，若要啟用 AI 分析，請手動將下方改為：
     // const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-   const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
     
     if (!apiKey) {
       setAiError("AI 功能已被停用：請在程式碼中設定您的 Gemini API Key。");
@@ -322,7 +388,6 @@ export default function App() {
           </div>
           
           <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3">
-            {/* 🌟 新增：主題切換按鈕 */}
             <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-300">
               <button 
                 onClick={() => setIsDarkMode(!isDarkMode)} 
@@ -416,7 +481,7 @@ export default function App() {
                   <div className="flex-1 w-full">
                     <p className="whitespace-pre-line pr-6 md:pr-8 text-gray-800 dark:text-gray-300 leading-relaxed font-medium">{aiContent}</p>
                     
-                    {/* 🌟 新增：文章底部的明顯關閉按鈕 */}
+                    {/* 文章底部的明顯關閉按鈕 */}
                     {aiContent !== DEFAULT_AI_TEXT && (
                       <div className="mt-6 flex justify-end border-t border-gray-200 dark:border-gray-700/50 pt-4">
                         <button 
