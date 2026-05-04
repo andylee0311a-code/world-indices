@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TrendingUp, TrendingDown, Clock, Activity, Globe, Zap, Sparkles, RefreshCcw, AlertTriangle, LayoutGrid, List, ArrowUp, X, ExternalLink, Lightbulb, Target, Sun, Moon } from 'lucide-react';
 
-// 初始資料：作為畫面初次載入的版型框架
+// 初始資料：作為畫面初次載入的版型框架 (🌟 已加回台指期電子盤)
 const INITIAL_MARKET_DATA = [
   { id: 'tw-taiex', symbol: '^TWII', name: '台灣加權指數', category: '台灣市場', price: 0, change: 0, pct: 0 },
+  { id: 'tw-txn', symbol: 'TWN=F', name: '台指期 (電子盤)', category: '台灣市場', price: 0, change: 0, pct: 0 },
   { id: 'tw-tsm', symbol: 'TSM', name: '台積電 ADR', category: '台灣市場', price: 0, change: 0, pct: 0 },
   { id: 'tw-usdtwd', symbol: 'TWD=X', name: '美元兌台幣', category: '台灣市場', price: 0, change: 0, pct: 0 },
   
