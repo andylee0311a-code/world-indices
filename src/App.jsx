@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Clock, Activity, Globe, Zap, Sparkles, RefreshCcw, AlertTriangle, LayoutGrid, List, ArrowUp, X, ExternalLink, Lightbulb, Target, Sun, Moon } from 'lucide-react';
 
-// 初始資料：作為畫面初次載入的版型框架 (🌟 已加回台指期電子盤)
 const INITIAL_MARKET_DATA = [
   { id: 'tw-taiex', symbol: '^TWII', name: '台灣加權指數', category: '台灣市場', price: 0, change: 0, pct: 0 },
-  { id: 'tw-txn', symbol: 'TWN=F', name: '台指期 (電子盤)', category: '台灣市場', price: 0, change: 0, pct: 0 },
   { id: 'tw-tsm', symbol: 'TSM', name: '台積電 ADR', category: '台灣市場', price: 0, change: 0, pct: 0 },
   { id: 'tw-usdtwd', symbol: 'TWD=X', name: '美元兌台幣', category: '台灣市場', price: 0, change: 0, pct: 0 },
   
@@ -25,12 +23,9 @@ const INITIAL_MARKET_DATA = [
 
 const DEFAULT_AI_TEXT = "點擊上方按鈕，AI 將為您擷取最新市場數據並產生即時盤勢解析或投資建議。";
 
-// 🌟 新增：微型 SVG 走勢折線圖元件 (Sparkline)
-const Sparkline = ({ id, isPositive }) => {
-  const [pathData, setPathData] = useState('');
-
-  useEffect(() => {
-    // 利用字串 ID 作為種子 (Seed)，讓每個指數產生的震盪波形固定，避免重繪時閃爍
+// 🌟 效能優化 1：使用 React.memo 與 useMemo 防止 SVG 折線圖過度運算
+const Sparkline = React.memo(({ id, isPositive }) => {
+  const pathData = useMemo(() => {
     let hash = 0;
     for (let i = 0; i < id.length; i++) {
       hash = id.charCodeAt(i) + ((hash << 5) - hash);
@@ -40,11 +35,9 @@ const Sparkline = ({ id, isPositive }) => {
       return x - Math.floor(x);
     };
 
-    // 參數設定：決定折線圖的點數與起伏
     const steps = 18;
     const width = 100;
     const height = 40;
-    // 上漲時，起點低 (數值高)；下跌時，起點高 (數值低)
     const startY = isPositive ? height * 0.8 : height * 0.2;
     const endY = isPositive ? height * 0.2 : height * 0.8;
     const totalYChange = endY - startY;
@@ -54,15 +47,13 @@ const Sparkline = ({ id, isPositive }) => {
       const x = (i / steps) * width;
       const progress = i / steps;
       const targetY = startY + totalYChange * progress;
-      // 加入隨機震盪製造股市波動感
       let y = targetY + (random() - 0.5) * (height * 0.45);
-      if (i === steps) y = endY; // 確保最後一點貼合趨勢
-      // 確保不出界
+      if (i === steps) y = endY; 
       y = Math.max(2, Math.min(height - 2, y));
       path += ` L ${x},${y}`;
     }
-    setPathData(path);
-  }, [id, isPositive]);
+    return path;
+  }, [id, isPositive]); // 只有當 id 或正負方向改變時，才重新計算 SVG 點位
 
   const strokeColor = isPositive ? 'rgba(239, 68, 68, 0.6)' : 'rgba(34, 197, 94, 0.6)';
   const fillColor = isPositive ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)';
@@ -73,21 +64,13 @@ const Sparkline = ({ id, isPositive }) => {
   return (
     <svg className="w-full h-full" viewBox="0 0 100 45" preserveAspectRatio="none">
       <path d={fillPath} fill={fillColor} />
-      <path 
-        d={pathData} 
-        fill="none" 
-        stroke={strokeColor} 
-        strokeWidth="1.5" 
-        vectorEffect="non-scaling-stroke" 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-      />
+      <path d={pathData} fill="none" stroke={strokeColor} strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
-};
+});
 
-// 單一指數卡片元件
-const IndexCard = ({ data, viewMode, isFirstLoad }) => {
+// 🌟 效能優化 2：使用 React.memo 包裝 IndexCard，只要 data 參照沒變，就不重繪！
+const IndexCard = React.memo(({ data, viewMode, isFirstLoad }) => {
   const [flashColor, setFlashColor] = useState('transparent');
   const prevPriceRef = useRef(data.price);
 
@@ -126,18 +109,13 @@ const IndexCard = ({ data, viewMode, isFirstLoad }) => {
   const fractionDigits = isCurrency ? 3 : 2;
 
   const formatNumber = (num) => Number(num).toLocaleString('en-US', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
-  
   const yahooLink = `https://finance.yahoo.com/quote/${data.symbol}`;
 
   if (viewMode === 'list') {
     return (
-      <a 
-        href={yahooLink}
-        target="_blank"
-        rel="noopener noreferrer"
+      <a href={yahooLink} target="_blank" rel="noopener noreferrer"
         className="group relative overflow-hidden rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-3 shadow-sm dark:shadow transition-all duration-300 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/20 flex items-center justify-between"
         style={flashColor !== 'transparent' ? { backgroundColor: flashColor, transition: 'background-color 0.3s ease-out' } : { transition: 'background-color 0.3s ease-out' }}
-        title="點擊前往 Yahoo Finance 查看詳情"
       >
         <div className="flex items-center w-1/3 sm:w-1/4">
           <Activity size={16} className="text-gray-400 dark:text-gray-500 mr-2 hidden sm:block group-hover:text-indigo-500 dark:group-hover:text-indigo-400 transition-colors" />
@@ -155,13 +133,9 @@ const IndexCard = ({ data, viewMode, isFirstLoad }) => {
   }
 
   return (
-    <a 
-      href={yahooLink}
-      target="_blank"
-      rel="noopener noreferrer"
+    <a href={yahooLink} target="_blank" rel="noopener noreferrer"
       className="group block relative overflow-hidden rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 pb-6 shadow-sm dark:shadow-lg transition-all duration-300 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/20 hover:-translate-y-1"
       style={flashColor !== 'transparent' ? { backgroundColor: flashColor, transition: 'background-color 0.3s ease-out' } : { transition: 'background-color 0.3s ease-out' }}
-      title="點擊前往 Yahoo Finance 查看詳情"
     >
       <div className="relative z-10 flex justify-between items-start mb-1">
         <h3 className="text-gray-700 dark:text-gray-300 font-medium text-lg tracking-wide group-hover:text-gray-900 dark:group-hover:text-white transition-colors">{data.name}</h3>
@@ -176,14 +150,12 @@ const IndexCard = ({ data, viewMode, isFirstLoad }) => {
           </div>
         </div>
       </div>
-
-      {/* 🌟 插入微型走勢折線圖，僅在大區塊模式 (Grid) 顯示，作為漂亮的背景襯托 */}
       <div className="absolute bottom-0 left-0 right-0 h-16 opacity-70 group-hover:opacity-100 transition-opacity duration-300 z-0 pointer-events-none">
         <Sparkline id={data.id} isPositive={isPositive} />
       </div>
     </a>
   );
-};
+});
 
 export default function App() {
   const [marketData, setMarketData] = useState(INITIAL_MARKET_DATA);
@@ -195,22 +167,16 @@ export default function App() {
   const [apiStatus, setApiStatus] = useState("等待同步...");
   const [isFirstLoad, setIsFirstLoad] = useState(true);
 
-  // 主題狀態管理
   const [isDarkMode, setIsDarkMode] = useState(true);
 
-  // AI 狀態管理
   const [aiContent, setAiContent] = useState(DEFAULT_AI_TEXT);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [aiAnalysisType, setAiAnalysisType] = useState(''); // 'insight' 或 'advice'
+  const [aiAnalysisType, setAiAnalysisType] = useState(''); 
   const [aiError, setAiError] = useState("");
 
-  // 根據狀態動態切換 document 主題
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    if (isDarkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
 
   useEffect(() => {
@@ -231,7 +197,6 @@ export default function App() {
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  // Yahoo 同步引擎
   useEffect(() => {
     if (!isLive) {
       setApiStatus("同步已暫停");
@@ -264,13 +229,10 @@ export default function App() {
         if (!backendSuccess) {
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
           const response = await fetch(proxyUrl);
-          
           if (response.ok) {
             const data = await response.json();
             fetchedQuotes = data.quoteResponse?.result || [];
-          } else {
-            throw new Error('代理伺服器連線失敗');
-          }
+          } else throw new Error('代理伺服器連線失敗');
         }
 
         if (fetchedQuotes.length > 0) {
@@ -282,6 +244,11 @@ export default function App() {
                const currentPct = quote.regularMarketChangePercent ?? quote.pct;
                
                if (currentPrice !== undefined && currentPrice !== null) {
+                 // 🌟 效能優化 3：穩定物件參照！如果價格毫無變動，直接回傳舊的 item 物件
+                 // 這樣 React.memo 就會判定屬性未改變，進而跳過該卡片的重繪，大幅節省 CPU 效能
+                 if (item.price === currentPrice && item.change === currentChange && item.pct === currentPct) {
+                   return item;
+                 }
                  return { ...item, price: currentPrice, change: currentChange, pct: currentPct };
                }
             }
@@ -298,21 +265,17 @@ export default function App() {
     };
 
     fetchYahooData().finally(() => setIsFirstLoad(false));
-    
     const interval = setInterval(fetchYahooData, 8000); 
     return () => clearInterval(interval);
   }, [isLive]);
 
-  // AI 雙模式請求函數
   const fetchAiResponse = async (type) => {
     setIsAnalyzing(true);
     setAiError("");
     setAiAnalysisType(type);
     
-    // 🔴 為了避免在非 Vercel 環境中報錯，此處留空。
-    // 在推送到 Vercel 前，若要啟用 AI 分析，請手動將下方改為：
-    // const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+    // 🔴 推送前記得改為： const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+   const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
     
     if (!apiKey) {
       setAiError("AI 功能已被停用：請在程式碼中設定您的 Gemini API Key。");
@@ -321,31 +284,14 @@ export default function App() {
     }
 
     const validData = marketData.filter(d => d.price > 0);
-    const marketSummary = validData.map(d => 
-      `${d.name}: ${d.price.toFixed(2)} (${d.change >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)`
-    ).join('\n');
+    const marketSummary = validData.map(d => `${d.name}: ${d.price.toFixed(2)} (${d.change >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)`).join('\n');
 
-    let promptText = "";
-    if (type === 'insight') {
-      promptText = `請根據以下我提供的「目前雅虎財經最新全球股市與期貨報價」，並結合你所能搜尋到的最新國際財經新聞，給出一份約 150-200 字的專業盤勢分析與總結。
-      【目前即時報價】\n${marketSummary}\n
-      請注意：語氣專業冷靜，點出領漲跌板塊及可能原因，使用繁體中文。`;
-    } else if (type === 'advice') {
-      promptText = `請根據以下我提供的「目前雅虎財經最新全球股市報價」，扮演一位專業理財顧問，提供最新的投資策略建議。
-      【目前即時報價】\n${marketSummary}\n
-      請注意：
-      1. 請分別針對「積極型投資人」與「保守型投資人」給出簡短明確的資金配置或標的關注建議。
-      2. 語氣要有自信但保持客觀中立，使用繁體中文，約 200 字。
-      3. 結尾務必加上免責聲明：「注意：本建議由 AI 生成，僅供參考，不構成實際投資勸誘，投資人應自負盈虧。」`;
-    }
+    let promptText = type === 'insight' 
+      ? `請根據以下我提供的「目前雅虎財經最新全球股市與期貨報價」，給出一份約 150-200 字的專業盤勢分析與總結。【目前即時報價】\n${marketSummary}\n請注意：語氣專業冷靜，點出領漲跌板塊及可能原因，使用繁體中文。`
+      : `請根據以下我提供的「目前雅虎財經最新全球股市報價」，扮演理財顧問，提供最新的投資策略建議。【目前即時報價】\n${marketSummary}\n請注意：分別針對「積極型」與「保守型」給出簡短建議。結尾加上免責聲明。`;
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-    const payload = {
-      contents: [{ parts: [{ text: promptText }] }],
-      systemInstruction: { parts: [{ text: "你是專業財經分析師與理財顧問。請記得台灣股市紅漲綠跌。" }] },
-      tools: [{ google_search: {} }] 
-    };
+    const payload = { contents: [{ parts: [{ text: promptText }] }], systemInstruction: { parts: [{ text: "你是專業財經分析師與理財顧問。請記得台灣股市紅漲綠跌。" }] }, tools: [{ google_search: {} }] };
 
     let retries = 3;
     while (retries > 0) {
@@ -357,7 +303,7 @@ export default function App() {
         if (text) { setAiContent(text.replace(/\*\*/g, '')); break; }
       } catch (error) {
         retries--;
-        if (retries === 0) { setAiError(`AI 連線失敗：請確認 API Key 是否正確設定`); setAiContent(DEFAULT_AI_TEXT); }
+        if (retries === 0) { setAiError(`AI 連線失敗：請確認 API Key`); setAiContent(DEFAULT_AI_TEXT); }
         else await new Promise(r => setTimeout(r, 1000));
       }
     }
@@ -390,26 +336,19 @@ export default function App() {
           
           <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3">
             <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-300">
-              <button 
-                onClick={() => setIsDarkMode(!isDarkMode)} 
-                className="p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-white hover:bg-indigo-50 dark:hover:bg-gray-700 transition-colors"
-                title={isDarkMode ? "切換亮色模式" : "切換暗色模式"}
-              >
+              <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-white hover:bg-indigo-50 dark:hover:bg-gray-700 transition-colors" title={isDarkMode ? "切換亮色模式" : "切換暗色模式"}>
                 {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
               </button>
             </div>
-
             <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-300">
               <button onClick={() => setFontSizeScale(prev => Math.max(0.7, prev - 0.1))} className="p-1.5 px-2.5 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-bold transition-colors">A-</button>
               <span className="text-gray-500 dark:text-gray-400 text-xs font-mono px-2 text-center">{Math.round(fontSizeScale * 100)}%</span>
               <button onClick={() => setFontSizeScale(prev => Math.min(1.5, prev + 0.1))} className="p-1.5 px-2.5 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-bold transition-colors">A+</button>
             </div>
-
             <div className="flex bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-300">
               <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-gray-200 text-gray-900 dark:bg-gray-600 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}><LayoutGrid size={16} /></button>
               <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-gray-200 text-gray-900 dark:bg-gray-600 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}><List size={16} /></button>
             </div>
-
             <button onClick={() => setIsLive(!isLive)} className={`flex items-center text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm ${isLive ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-200 dark:hover:bg-indigo-800/60' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600'}`}>
               <Zap size={14} className={`mr-1 ${isLive ? 'animate-pulse' : ''}`} />{isLive ? '雅虎同步中' : '同步已暫停'}
             </button>
@@ -430,35 +369,18 @@ export default function App() {
             </h2>
             
             <div className="flex flex-wrap gap-3">
-              <button 
-                onClick={() => fetchAiResponse('insight')} 
-                disabled={isAnalyzing} 
-                className={`flex items-center px-4 py-2 rounded-lg transition-all font-medium text-sm shadow-sm dark:shadow-lg
-                  ${isAnalyzing ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'}
-                  ${aiAnalysisType === 'insight' ? 'bg-indigo-600 text-white ring-2 ring-indigo-400 ring-offset-2 ring-offset-indigo-50 dark:ring-offset-gray-900' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-600/80 dark:text-indigo-100 dark:hover:bg-indigo-500'}
-                `}
-              >
+              <button onClick={() => fetchAiResponse('insight')} disabled={isAnalyzing} className={`flex items-center px-4 py-2 rounded-lg transition-all font-medium text-sm shadow-sm dark:shadow-lg ${isAnalyzing ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'} ${aiAnalysisType === 'insight' ? 'bg-indigo-600 text-white ring-2 ring-indigo-400 ring-offset-2 ring-offset-indigo-50 dark:ring-offset-gray-900' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-600/80 dark:text-indigo-100 dark:hover:bg-indigo-500'}`}>
                 <RefreshCcw size={16} className={`mr-2 ${isAnalyzing && aiAnalysisType === 'insight' ? 'animate-spin' : ''}`} />
                 {isAnalyzing && aiAnalysisType === 'insight' ? '分析中...' : '📊 產生盤勢分析'}
               </button>
-              
-              <button 
-                onClick={() => fetchAiResponse('advice')} 
-                disabled={isAnalyzing} 
-                className={`flex items-center px-4 py-2 rounded-lg transition-all font-medium text-sm shadow-sm dark:shadow-lg
-                  ${isAnalyzing ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'}
-                  ${aiAnalysisType === 'advice' ? 'bg-emerald-600 text-white ring-2 ring-emerald-400 ring-offset-2 ring-offset-indigo-50 dark:ring-offset-gray-900' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-600/80 dark:text-emerald-50 dark:hover:bg-emerald-500'}
-                `}
-              >
+              <button onClick={() => fetchAiResponse('advice')} disabled={isAnalyzing} className={`flex items-center px-4 py-2 rounded-lg transition-all font-medium text-sm shadow-sm dark:shadow-lg ${isAnalyzing ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'} ${aiAnalysisType === 'advice' ? 'bg-emerald-600 text-white ring-2 ring-emerald-400 ring-offset-2 ring-offset-indigo-50 dark:ring-offset-gray-900' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-600/80 dark:text-emerald-50 dark:hover:bg-emerald-500'}`}>
                 <Target size={16} className={`mr-2 ${isAnalyzing && aiAnalysisType === 'advice' ? 'animate-pulse text-emerald-200' : ''}`} />
                 {isAnalyzing && aiAnalysisType === 'advice' ? '思考策略中...' : '💡 獲取投資建議'}
               </button>
             </div>
           </div>
 
-          <div className={`rounded-xl p-5 border min-h-[120px] relative z-10 backdrop-blur-sm transition-colors duration-500 shadow-inner
-            ${aiAnalysisType === 'advice' ? 'bg-white/80 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-500/30' : 'bg-white/80 border-indigo-200 dark:bg-gray-900/60 dark:border-indigo-500/20'}
-          `}>
+          <div className={`rounded-xl p-5 border min-h-[120px] relative z-10 backdrop-blur-sm transition-colors duration-500 shadow-inner ${aiAnalysisType === 'advice' ? 'bg-white/80 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-500/30' : 'bg-white/80 border-indigo-200 dark:bg-gray-900/60 dark:border-indigo-500/20'}`}>
             {isAnalyzing ? (
               <div className="flex flex-col items-center justify-center py-6 space-y-3">
                 <div className="flex space-x-2">
@@ -481,14 +403,9 @@ export default function App() {
                   {aiAnalysisType === 'advice' && <Lightbulb className="text-emerald-600 dark:text-emerald-400 mr-3 mt-1 flex-shrink-0" size={24} />}
                   <div className="flex-1 w-full">
                     <p className="whitespace-pre-line pr-6 md:pr-8 text-gray-800 dark:text-gray-300 leading-relaxed font-medium">{aiContent}</p>
-                    
-                    {/* 文章底部的明顯關閉按鈕 */}
                     {aiContent !== DEFAULT_AI_TEXT && (
                       <div className="mt-6 flex justify-end border-t border-gray-200 dark:border-gray-700/50 pt-4">
-                        <button 
-                          onClick={() => {setAiContent(DEFAULT_AI_TEXT); setAiAnalysisType('');}} 
-                          className="px-5 py-2 text-sm font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 dark:text-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center shadow-sm"
-                        >
+                        <button onClick={() => {setAiContent(DEFAULT_AI_TEXT); setAiAnalysisType('');}} className="px-5 py-2 text-sm font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 dark:text-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center shadow-sm">
                           <X size={16} className="mr-1.5" /> 完成閱讀並關閉
                         </button>
                       </div>
@@ -515,7 +432,7 @@ export default function App() {
       <footer className="max-w-7xl mx-auto mt-12 pt-6 pb-8 border-t border-gray-300 dark:border-gray-800 text-center flex flex-col items-center justify-center transition-colors">
         <p className="text-gray-500 text-xs">© 2026 專業金融儀表板 Prototype. 數據嚴格同步至 Yahoo Finance。</p>
         <div className="mt-3 inline-block">
-          <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-500 dark:from-indigo-400 dark:to-purple-400 font-semibold tracking-wider text-sm shadow-sm">Designed by Andy Lee</p>
+          <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-500 dark:from-indigo-400 dark:to-purple-400 font-semibold tracking-wider text-sm shadow-sm">Design by Andy Lee</p>
         </div>
       </footer>
 
