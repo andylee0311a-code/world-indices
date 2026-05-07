@@ -23,7 +23,22 @@ const INITIAL_MARKET_DATA = [
 
 const DEFAULT_AI_TEXT = "點擊上方按鈕，AI 將為您擷取最新市場數據並產生即時盤勢解析或投資建議。";
 
-// 🌟 效能優化 1：使用 React.memo 與 useMemo 防止 SVG 折線圖過度運算
+// 🌟 效能優化：獨立出 LiveClock 組件，防止每秒更新拖垮整個 App 導致點擊延遲
+const LiveClock = React.memo(() => {
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <span className="font-mono text-sm tracking-wider text-teal-700 dark:text-teal-100">
+      {time.toLocaleDateString('zh-TW')} {time.toLocaleTimeString('zh-TW')}
+    </span>
+  );
+});
+
 const Sparkline = React.memo(({ id, isPositive }) => {
   const pathData = useMemo(() => {
     let hash = 0;
@@ -53,7 +68,7 @@ const Sparkline = React.memo(({ id, isPositive }) => {
       path += ` L ${x},${y}`;
     }
     return path;
-  }, [id, isPositive]); // 只有當 id 或正負方向改變時，才重新計算 SVG 點位
+  }, [id, isPositive]); 
 
   const strokeColor = isPositive ? 'rgba(239, 68, 68, 0.6)' : 'rgba(34, 197, 94, 0.6)';
   const fillColor = isPositive ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)';
@@ -69,7 +84,6 @@ const Sparkline = React.memo(({ id, isPositive }) => {
   );
 });
 
-// 🌟 效能優化 2：使用 React.memo 包裝 IndexCard，只要 data 參照沒變，就不重繪！
 const IndexCard = React.memo(({ data, viewMode, isFirstLoad }) => {
   const [flashColor, setFlashColor] = useState('transparent');
   const prevPriceRef = useRef(data.price);
@@ -159,7 +173,7 @@ const IndexCard = React.memo(({ data, viewMode, isFirstLoad }) => {
 
 export default function App() {
   const [marketData, setMarketData] = useState(INITIAL_MARKET_DATA);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  // 移除會每秒觸發全域重新渲染的 currentTime
   const [isLive, setIsLive] = useState(true);
   const [viewMode, setViewMode] = useState('grid');
   const [fontSizeScale, setFontSizeScale] = useState(1);
@@ -174,15 +188,15 @@ export default function App() {
   const [aiAnalysisType, setAiAnalysisType] = useState(''); 
   const [aiError, setAiError] = useState("");
 
+  // 🌟 效能優化：快取市場板塊分類，避免重新比對運算
+  const categories = useMemo(() => {
+    return [...new Set(marketData.map(item => item.category))];
+  }, [marketData]);
+
   useEffect(() => {
     if (isDarkMode) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontSizeScale * 100}%`;
@@ -244,8 +258,6 @@ export default function App() {
                const currentPct = quote.regularMarketChangePercent ?? quote.pct;
                
                if (currentPrice !== undefined && currentPrice !== null) {
-                 // 🌟 效能優化 3：穩定物件參照！如果價格毫無變動，直接回傳舊的 item 物件
-                 // 這樣 React.memo 就會判定屬性未改變，進而跳過該卡片的重繪，大幅節省 CPU 效能
                  if (item.price === currentPrice && item.change === currentChange && item.pct === currentPct) {
                    return item;
                  }
@@ -310,8 +322,6 @@ export default function App() {
     setIsAnalyzing(false);
   };
 
-  const categories = [...new Set(marketData.map(item => item.category))];
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-6 font-sans transition-colors duration-300">
       <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-gray-300 dark:border-gray-700 pb-4 transition-colors duration-300">
@@ -331,7 +341,7 @@ export default function App() {
         <div className="mt-4 md:mt-0 flex flex-col items-end">
           <div className="flex items-center bg-white dark:bg-gray-800 rounded-full px-4 py-2 border border-gray-200 dark:border-gray-700 shadow-sm dark:shadow-inner transition-colors duration-300">
             <Clock size={16} className="text-gray-400 mr-2" />
-            <span className="font-mono text-sm tracking-wider text-teal-700 dark:text-teal-100">{currentTime.toLocaleDateString('zh-TW')} {currentTime.toLocaleTimeString('zh-TW')}</span>
+            <LiveClock />
           </div>
           
           <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3">
